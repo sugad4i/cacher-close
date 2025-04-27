@@ -1,0 +1,123 @@
+<index html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>集計サイト</title>
+</head>
+<body>
+
+<h1>CSV集計ツール</h1>
+<input type="file" id="csvFileInput" accept=".csv" />
+
+<div id="output"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+<script>
+document.getElementById('csvFileInput').addEventListener('change', function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+            const data = results.data;
+            processData(data);
+        }
+    });
+});
+
+function processData(data) {
+    let totalCount = 0;
+    let foreignCount = 0;
+    let maleCount = 0;
+    let femaleCount = 0;
+    let door = 0;
+    let foreignDoor = 0;
+    let doorLate = 0;
+    let foreignDoorLate = 0;
+    let shopGuest = 0;
+    let shopFree = 0;
+    let shops = {};
+
+    data.forEach(row => {
+        const shop = row['商品名']?.trim();
+        const count = parseInt(row['売上数']) || 0;
+
+        if (!shop || isNaN(count)) return;
+
+        if (shop.includes('男性')) {
+            maleCount += count;
+            totalCount += count;
+        } else if (shop.includes('女性')) {
+            femaleCount += count;
+            totalCount += count;
+        }
+
+        if (shop.includes('G男性') || shop.includes('G女性')) {
+            foreignCount += count;
+        }
+
+        if (shop.includes('Door')) {
+            if (shop.includes('22')) {
+                doorLate += count;
+            } else {
+                door += count;
+            }
+        }
+
+        if (shop.includes('外国人Door')) {
+            if (shop.includes('22')) {
+                foreignDoorLate += count;
+            } else {
+                foreignDoor += count;
+            }
+        }
+
+        if (shop.includes('店ゲスト')) {
+            shopGuest += count;
+        }
+        if (shop.includes('店Free')) {
+            shopFree += count;
+        }
+
+        // 店舗名ごとのゲスト／フリーカウント
+        const match = shop.match(/^(.+?)ゲスト(男性|女性)?$/);
+        if (match) {
+            const storeName = match[1];
+            shops[storeName] = shops[storeName] || { guest: 0, free: 0 };
+            shops[storeName].guest += count;
+            return;
+        }
+        const matchFree = shop.match(/^(.+?)フリー(男性|女性)?$/);
+        if (matchFree) {
+            const storeName = matchFree[1];
+            shops[storeName] = shops[storeName] || { guest: 0, free: 0 };
+            shops[storeName].free += count;
+            return;
+        }
+    });
+
+    // 出力作成
+    let html = '';
+
+    html += `<h2>総数:${totalCount} (外国人${foreignCount}人)</h2>`;
+    html += `<p>M:${maleCount} W:${femaleCount}</p>`;
+    html += `<p>Door:${door}</p>`;
+    html += `<p>外国人Door:${foreignDoor}</p>`;
+    html += `<p>22〜1:00 Door:${doorLate}</p>`;
+    html += `<p>22〜1:00 外国人Door:${foreignDoorLate}</p>`;
+    html += `<p>店ゲスト:${shopGuest}</p>`;
+    html += `<p>店Free:${shopFree}</p>`;
+
+    for (const [shopName, { guest, free }] of Object.entries(shops)) {
+        html += `<h3>${shopName}</h3>`;
+        html += `<p>${guest + free} (ゲスト${guest} フリー${free})</p>`;
+    }
+
+    document.getElementById('output').innerHTML = html;
+}
+</script>
+
+</body>
+</html>
