@@ -126,33 +126,7 @@ function parseCSV(rows){
                                      a.label.localeCompare(b.label,'ja'));
 }
 
-/* ───────── 表描画 ───────── */
-function buildTable(){
- tbody.innerHTML='';
- list.forEach(o=>{
-   const lock=o.label.includes('フリー');
-   const tr=document.createElement('tr');
-   tr.innerHTML=
-     `<td>${o.label}</td><td>${o.cnt}</td>`+
-     `<td>${lock?0:`<input type=number id=${o.priceId} value=0>`}</td>`;
-   tbody.appendChild(tr);
-   if(!lock) document.getElementById(o.priceId).oninput=calc;
- });
-}
 
-/* ───────── 合計金額 ───────── */
-function calc(){
- let sum=0;
- tbody.querySelectorAll('tr').forEach(tr=>{
-   const lbl=tr.cells[0].textContent.trim();
-   const num=+tr.cells[1].textContent;
-   const inp=tr.querySelector('input');
-   const price=inp?(+inp.value||0):0;                 // フリーは入力欄無し→0
-   sum += num*price;
- });
- document.getElementById('total').textContent=`合計金額: ${sum.toLocaleString()} 円`;
- buildBig(sum);
-}
 
 /* ───────── 本文生成 ───────── */
 function buildBig(sum){
