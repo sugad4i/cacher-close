@@ -1,228 +1,180 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>キャッシャー集計 ver0.4.2</title>
-  <style>
-    #header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px;
-      background-color: #f0f0f0;
-      border-bottom: 1px solid #ccc;
-    }
-    #header h1 {
-      margin: 0;
-      font-size: 24px;
-    }
-    #header span {
-      font-size: 14px;
-      color: #666;
-    }
-    #output {
-      margin-top: 30px;
-      white-space: pre;
-      font-family: monospace;
-    }
-    input[type="number"] {
-      width: 40px;
-      text-align: center;
-    }
-    #copyButton {
-      margin-top: 20px;
-      padding: 10px 20px;
-      font-size: 16px;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>キャッシャー集計 ver4.3</title>
+<style>
+ body{font-family:monospace;margin:20px}
+ #head{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #ccc;padding-bottom:8px}
+ table{border-collapse:collapse;margin-top:16px}
+ th,td{border:1px solid #aaa;padding:4px 8px}
+ th{background:#eee}
+ input[type=number]{width:90px;text-align:right}
+ #total{margin:18px 0;font-size:22px;font-weight:bold;color:#c00}
+ #big{white-space:pre;margin-top:20px}
+ #copy{padding:8px 20px;font-size:16px}
+</style>
 </head>
 <body>
 
-<div id="header">
-  <h1>キャッシャー集計 ver0.4.2</h1>
-  <span>更新日: 2025/04/27</span>
-</div>
+<div id="head"><h1>キャッシャー集計 ver4.3</h1><span id="upd"></span></div>
 
-<input type="file" id="csvFileInput" accept=".csv" />
+<input type="file" id="csv" accept=".csv">
 
-<div id="output"></div>
+<table id="tbl"><thead>
+  <tr><th>カテゴリ / 商品名</th><th>人数</th><th>単価 (円)</th></tr>
+</thead><tbody></tbody></table>
 
-<button id="copyButton" onclick="copyText()">コピー</button>
+<div id="total"></div>
+
+<h3>コピー用本文</h3>
+<div id="big"></div>
+<button id="copy" onclick="copyTxt()">コピー</button>
 
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
 <script>
-let shopData = {};
-let summaryData = {};
+/* ---------- util ---------- */
+const tbody=document.querySelector('#tbl tbody');
+const upd = document.getElementById('upd');
+upd.textContent='更新 '+new Date().toLocaleDateString();
+const id  = s=>'p_'+btoa(unescape(encodeURIComponent(s))).replace(/=+$/,'');
+const norm=s=>s.replace(/22~1/g,'22-1').replace(/[ \u3000\t]+/g,' ').trim();
 
-document.getElementById('csvFileInput').addEventListener('change', function(event) {
-    const file = event.target.files[0];
-    if (!file) return;
+/* ---- 並べ替えキー（ざっくり：22-1 → 通常 → その他 → フリー） ---- */
+function key(lbl){
+  if(lbl.startsWith('22-1')) return '0'+lbl;
+  if(lbl.includes('フリー')) return '3'+lbl;
+  return '1'+lbl;
+}
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const text = new TextDecoder('shift-jis').decode(e.target.result);
+/* ---------- 主要集計変数 ---------- */
+let list=[],reEntry=0,door=0,fdoor=0,doorLate=0,fdoorLate=0;
+let bigTotal=0,foreign=0,male=0,female=0;
+const shop={};
 
-        Papa.parse(text, {
-            header: true,
-            skipEmptyLines: true,
-            complete: function(results) {
-                const data = results.data;
-                processData(data);
-            }
-        });
-    };
-    reader.readAsArrayBuffer(file);
+/* ---------- CSV ---------- */
+document.getElementById('csv').addEventListener('change',e=>{
+  const f=e.target.files[0]; if(!f) return;
+  new Response(f).arrayBuffer().then(buf=>{
+    const txt=new TextDecoder('shift-jis').decode(buf);
+    Papa.parse(txt,{header:true,skipEmptyLines:true,complete:r=>{
+      parseCSV(r.data);
+      buildTable();
+      calc();
+    }});
+  });
 });
 
-function getYesterdayDate() {
-    const today = new Date();
-    today.setDate(today.getDate() - 1);
-    const y = today.getFullYear();
-    const m = today.getMonth() + 1;
-    const d = today.getDate();
-    return `${y}/${m}/${d}`;
-}
+/* ---------- パーサ ---------- */
+function parseCSV(rows){
+  /* リセット */
+  list=[]; reEntry=0; door=0; fdoor=0; doorLate=0; fdoorLate=0;
+  bigTotal=0; foreign=0; male=0; female=0;
+  Object.keys(shop).forEach(k=>delete shop[k]);
 
-function padRight(str, length) {
-    return (str + ' '.repeat(length)).slice(0, length);
-}
+  const cntCol=rows[0]&&Object.keys(rows[0]).find(k=>k.replace(/\s/g,'').includes('販売商品数'));
+  const map=new Map();       // 行（フリー以外）
+  rows.forEach(row=>{
+    const catRaw =(row['カテゴリー']||'');
+    const nameRaw=(row['商品名']   ||'');
+    const cat = norm(catRaw);
+    const name= norm(nameRaw);
+    const n   = +row[cntCol]||0; if(!n) return;
 
-function padLeft(str, length) {
-    str = String(str);
-    return ' '.repeat(length - str.length) + str;
-}
+    /* ── カテゴリー＝その他 は完全ノーカン ── */
+    if(cat==='その他') return;
 
-function processData(data) {
-    if (!data || data.length === 0) {
-        document.getElementById('output').innerText = 'データが空です';
-        return;
+    /* ── Door 集計 ── */
+    if(['ローカル男性','ローカル女性','ローカルG男性','ローカルG女性'].includes(cat)){
+        door+=n; if(name.startsWith('22-1')) doorLate+=n;
+    }
+    if(['観光 男性','観光 女性'].includes(cat)){
+        fdoor+=n; if(name.startsWith('22-1')) fdoorLate+=n;
     }
 
-    let door = 0;
-    let foreignDoor = 0;
-    let doorLate = 0;
-    let foreignDoorLate = 0;
-    let total = 0;
-    let maleTotal = 0;
-    let femaleTotal = 0;
-    let foreignTotal = 0;
-    shopData = {};
+    /* ── 累積 for テーブル ── */
+    const label = cat || name;                    // カテゴリーがあれば優先
+    if(!map.has(label)) map.set(label,0);
+    map.set(label,map.get(label)+n);
 
-    let countColumn = null;
-    for (const key of Object.keys(data[0])) {
-        if (key.replace(/\s/g, '').includes('販売商品数')) {
-            countColumn = key;
-            break;
-        }
+    /* ── 全体集計(本文用) ── */
+    bigTotal+=n;
+    if(cat.includes('外国人')) foreign+=n;
+    if(cat.includes('男性'))  male   +=n;
+    else if(cat.includes('女性')) female+=n;
+
+    const m=name.match(/^(.+?)(ゲスト|フリー)/);
+    if(m){
+      const shopName=m[1].trim();
+      shop[shopName]=shop[shopName]||{guest:0,free:0};
+      if(m[2]==='ゲスト') shop[shopName].guest+=n;
+      else shop[shopName].free+=n;
     }
-    if (!countColumn) {
-        document.getElementById('output').innerText = '販売商品数の列が見つかりません';
-        return;
-    }
+  });
 
-    data.forEach(row => {
-        const originalItem = row['商品名']?.trim();
-        if (!originalItem) return;
-        if (originalItem.includes('再入場')) return; // 再入場は完全除外
+  /* フリー行保証 */
+  if(!map.has('フリー')) map.set('フリー',0);
 
-        const count = parseFloat(row[countColumn]) || 0;
-        const itemFixed = originalItem.replace(/22~1/g, '22-1');
-        const normalizedItem = itemFixed.replace(/^22-1\s*/, '');
-
-        total += count;
-
-        if (itemFixed.includes('G男性') || itemFixed.includes('G女性')) {
-            foreignTotal += count;
-        }
-
-        if (itemFixed.includes('男性')) {
-            maleTotal += count;
-        }
-        if (itemFixed.includes('女性')) {
-            femaleTotal += count;
-        }
-
-        if (itemFixed.includes('G男性') || itemFixed.includes('G女性')) {
-            if (itemFixed.includes('22-1')) {
-                foreignDoorLate += count;
-            } else {
-                foreignDoor += count;
-            }
-        } else if (itemFixed.includes('男性') || itemFixed.includes('ローカルG男性') || itemFixed.includes('女性') || itemFixed.includes('ローカルG女性')) {
-            if (itemFixed.includes('22-1')) {
-                doorLate += count;
-            } else {
-                door += count;
-            }
-        }
-
-        const shopMatch = normalizedItem.match(/^(.+?)(ゲスト|フリー)(男性|女性)?$/);
-        if (shopMatch) {
-            const shopName = shopMatch[1].trim();
-            const type = shopMatch[2];
-            shopData[shopName] = shopData[shopName] || { guest: 0, free: 0 };
-            if (type === 'ゲスト') {
-                shopData[shopName].guest += count;
-            }
-        }
-    });
-
-    summaryData = { total, foreignTotal, maleTotal, femaleTotal, door, foreignDoor, doorLate, foreignDoorLate };
-
-    generateOutput();
+  /* map → list 配列化 */
+  list=[...map.entries()].map(([label,cnt])=>({label,cnt,priceId:label.includes('フリー')?null:id(label)}))
+                         .sort((a,b)=>key(a.label).localeCompare(key(b.label),'ja'));
 }
 
-function generateOutput() {
-    let html = '';
-
-    html += 'キャッシャー集計\n\n';
-    html += `${getYesterdayDate()}\n\n`;
-
-    html += `総数:${Math.round(summaryData.total)}(外国人${Math.round(summaryData.foreignTotal)}人)\n`;
-    html += `M:${Math.round(summaryData.maleTotal)} W:${Math.round(summaryData.femaleTotal)}\n\n`;
-
-    html += `${padRight('Door', 20)}: ${padLeft(Math.round(summaryData.door), 4)}\n`;
-    html += `${padRight('外国人Door', 20)}: ${padLeft(Math.round(summaryData.foreignDoor), 4)}\n`;
-    html += `${padRight('22:00-1:00 Door', 20)}: ${padLeft(Math.round(summaryData.doorLate), 4)}\n`;
-    html += `${padRight('22:00-1:00 外国人Door', 20)}: ${padLeft(Math.round(summaryData.foreignDoorLate), 4)}\n`;
-    html += `${padRight('店ゲスト', 20)}: [<input type="number" id="shopGuestInput" value="0" onchange="updateTotal()">]\n`;
-    html += `${padRight('店フリー', 20)}: [<input type="number" id="shopFreeInput" value="0" onchange="updateTotal()">]\n\n`;
-
-    for (const [shop, { guest }] of Object.entries(shopData)) {
-        const id = shop.replace(/\s+/g, '_');
-        html += `${shop}\n　<span id="total_${id}">${guest}</span>（ゲスト${padLeft(guest, 3)} フリー[<input type="number" id="free_${id}" value="0" onchange="updateShopTotal('${id}', ${guest})">]）\n\n`;
-    }
-
-    document.getElementById('output').innerHTML = html;
+/* ---------- 表描画 ---------- */
+function buildTable(){
+  tbody.innerHTML='';
+  list.forEach(o=>{
+    const lock=o.label.includes('フリー');
+    const tr=document.createElement('tr');
+    tr.innerHTML=
+      `<td>${o.label}</td><td>${o.cnt}</td>`+
+      `<td>${lock?0:`<input type="number" id="${o.priceId}" value="0">`}</td>`;
+    tbody.appendChild(tr);
+    if(!lock) document.getElementById(o.priceId).oninput=calc;
+  });
 }
 
-function updateTotal() {
-    // 特に使わないが今後拡張用
+/* ---------- 合計金額 + 本文 ---------- */
+function calc(){
+  let sum=0;
+  tbody.querySelectorAll('tr').forEach(tr=>{
+    const lbl = tr.cells[0].textContent.trim();
+    const num = +tr.cells[1].textContent;
+    const inp = tr.querySelector('input');
+    const price = inp ? (+inp.value||0) : 0;      // フリー=0
+    sum += num*price;
+  });
+  document.getElementById('total').textContent=`合計金額: ${sum.toLocaleString()} 円`;
+
+  buildBig(sum);
 }
 
-function updateShopTotal(id, guest) {
-    const free = parseInt(document.getElementById(`free_${id}`).value) || 0;
-    const total = guest + free;
-    document.getElementById(`total_${id}`).innerText = total;
+/* ---------- 本文生成 ---------- */
+function buildBig(sum){
+  let txt='キャッシャー〆\n\n';
+  txt+=`総数:${bigTotal}(外国人${foreign}名)\n`;
+  txt+=`M:${male} W:${female}\n\n`;
+  txt+=`Door                :  ${door.toString().padStart(4)}\n`;
+  txt+=`外国人Door             :  ${fdoor.toString().padStart(4)}\n`;
+  txt+=`22:00-1:00 Door     :  ${doorLate.toString().padStart(4)}\n`;
+  txt+=`22:00-1:00 外国人Door  :  ${fdoorLate.toString().padStart(4)}\n\n`;
+
+  txt+='【店舗ゲスト/フリー】\n';
+  Object.keys(shop).forEach(s=>{
+     const g=shop[s].guest||0,f=shop[s].free||0;
+     txt+=`${s}\n　${g+f}(ゲスト${g}フリー${f})\n`;
+  });
+
+  txt+=`\n合計金額:${sum.toLocaleString()}円`;
+  document.getElementById('big').textContent=txt;
 }
 
-function copyText() {
-    let text = '';
-    const output = document.getElementById('output');
-
-    output.querySelectorAll('input[type="number"]').forEach(input => {
-        input.outerHTML = input.value;
-    });
-
-    text = output.innerText;
-
-    navigator.clipboard.writeText(text).then(function() {
-        alert('コピー完了！');
-    }, function(err) {
-        alert('コピー失敗...');
-    });
+/* ---------- クリップボード ---------- */
+function copyTxt(){
+  navigator.clipboard.writeText(document.getElementById('big').textContent)
+    .then(()=>alert('コピー完了！'))
+    .catch(()=>alert('コピー失敗…'));
 }
 </script>
-
 </body>
 </html>
