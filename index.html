@@ -84,15 +84,15 @@ function parseCSV(rows){
    /* ── Door / 外国人Door ── */
    if(cat==='ローカル男性' || cat==='ローカル女性'){
        door += n;
-       if(cat.startsWith('22-1')) doorLate += n;          // 無いはずだが保険
+       if(cat.startsWith('22~1')) doorLate += n;          // 無いはずだが保険
    }
-   if(cat==='観光 男性' || cat==='観光 女性' || cat==='観光'){
+   if(cat==='観光 男性' || cat==='観光 女性' ){
        fdoor += n;
-       if(cat.startsWith('22-1')) fdoorLate += n;        // 観光に 22-1 付きが来た時用
+       if(cat.startsWith('22~1')) fdoorLate += n;        // 観光に 22-1 付きが来た時用
    }
 
    /* ── 22-1 Door / 外国人Door ── */
-   if(cat==='22-1 男性' || cat==='22-1 女性'){
+   if(cat==='22~1 男性' || cat==='22~1 女性'){
        doorLate += n;
    }
    if(cat==='22-1 観光'){
