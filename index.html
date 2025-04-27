@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>キャッシャー集計 Encore</title>
+<title>キャッシャー集計 ver4.7</title>
 <style>
  body{font-family:monospace;margin:20px}
  #head{display:flex;justify-content:space-between;align-items:center;
@@ -17,7 +17,7 @@
 <body>
 
 <div id="head">
-  <h1>キャッシャー集計 ver4.6</h1>
+  <h1>キャッシャー集計 ver4.7</h1>
   <span id="upd"></span>
 </div>
 
@@ -34,7 +34,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
 <script>
-/* util */
+/* ───── util ───── */
 document.getElementById('upd').textContent =
   '更新 ' + new Date().toLocaleDateString();
 const tbody = document.querySelector('#tbl tbody');
@@ -42,22 +42,20 @@ const norm  = s => s.replace(/22~1/g,'22-1')
                     .replace(/[ \u3000\t]+/g,' ')
                     .trim();
 
-/* 並びキー：22-1 → 通常 → フリー */
-function key(lbl){
-  if(lbl.startsWith('22-1')) return '0'+lbl;
-  if(lbl.includes('フリー')) return '2'+lbl;
-  return '1'+lbl;
-}
+/* 並び：22-1 → 通常 → フリー */
+const sortKey = lbl =>
+  lbl.startsWith('22-1') ? '0'+lbl :
+  lbl.includes('フリー') ? '2'+lbl : '1'+lbl;
 
-/* 集計用 */
-let list=[],door=0,fdoor=0,doorLate=0,fdoorLate=0;
+/* 集計変数 */
+let rows=[],door=0,fdoor=0,doorLate=0,fdoorLate=0;
 let total=0,foreign=0,male=0,female=0;
 const shop={};
 
-/* CSV */
+/* CSV 読み込み */
 document.getElementById('csv').addEventListener('change',e=>{
-  const f=e.target.files[0]; if(!f) return;
-  f.arrayBuffer().then(buf=>{
+  const file=e.target.files[0]; if(!file) return;
+  file.arrayBuffer().then(buf=>{
     const txt=new TextDecoder('shift-jis').decode(buf);
     Papa.parse(txt,{header:true,skipEmptyLines:true,complete:r=>{
       parseCSV(r.data);
@@ -68,95 +66,105 @@ document.getElementById('csv').addEventListener('change',e=>{
 });
 
 /* 解析 */
-function parseCSV(rows){
-  list=[]; door=fdoor=doorLate=fdoorLate=0;
+function parseCSV(data){
+  rows=[]; door=fdoor=doorLate=fdoorLate=0;
   total=foreign=male=female=0;
   Object.keys(shop).forEach(k=>delete shop[k]);
 
-  const cntCol=rows[0]&&Object.keys(rows[0]).find(k=>k.replace(/\s/g,'').includes('販売商品数'));
+  const cntCol=data[0]&&Object.keys(data[0]).find(k=>k.replace(/\s/g,'').includes('販売商品数'));
   const map=new Map();
 
-  rows.forEach(row=>{
-    const rawCat=row['カテゴリー']||'';
-    const rawName=row['商品名']||'';
-    const cat = norm(rawCat);
-    const name= norm(rawName);
-    const n   = +row[cntCol]||0;
+  data.forEach(row=>{
+    const cat  = norm(row['カテゴリー']||'');
+    const name = norm(row['商品名']||'');
+    const n    = +row[cntCol]||0;
     if(!n) return;
 
-    /* カテゴリーその他は完全スキップ */
+    /* その他はノーカウント */
     if(cat==='その他') return;
 
-    /* Door 集計 */
-    if(cat==='ローカル男性'||cat==='ローカル女性'){door+=n;}
-    if(cat==='観光 男性'||cat==='観光 女性'||cat==='観光'){fdoor+=n;}
-    if(cat==='22-1 男性'||cat==='22-1 女性'){doorLate+=n;}
-    if(cat==='22-1 観光'){fdoorLate+=n;}
+    /* ── Door 通常 ── */
+    if(['ローカル男性','ローカル女性','ローカルG男性','ローカルG女性'].includes(cat))
+        door+=n;
 
-    /* テーブル集計 */
-    const label=cat||name;
+    /* ── 外国人Door 通常 ── */
+    if(['観光 男性','観光 女性','観光'].includes(cat))
+        fdoor+=n;
+
+    /* ── 22-1 Door ── */
+    if(['22-1 男性','22-1 女性',
+        '22-1 ローカル男性','22-1 ローカル女性',
+        '22-1 ローカルG男性','22-1 ローカルG女性'].includes(cat))
+        doorLate+=n;
+
+    /* ── 22-1 外国人Door ── */
+    if(['22-1 観光','22-1 観光 男性','22-1 観光 女性'].includes(cat))
+        fdoorLate+=n;
+
+    /* テーブル行 */
+    const label = cat || name;
     map.set(label,(map.get(label)||0)+n);
 
     /* M / W (商品名ベース) */
     if(name.includes('男性')) male+=n;
     else if(name.includes('女性')) female+=n;
 
-    /* 全体 & 外国人 */
+    /* 全体人数・外国人 */
     total+=n;
     if(cat.includes('観光')||cat.includes('外国人')) foreign+=n;
 
-    /* 店舗ゲスト / フリー */
+    /* 店名ゲスト/フリー (22-1 トークン除去) */
     const m=name.match(/^(.+?)(ゲスト|フリー)/);
     if(m){
-       /* 22-1 を除去して店名を正規化 */
-       const store=m[1].replace(/22-1/gi,'').trim();
-       shop[store]=shop[store]||{guest:0,free:0};
-       if(m[2]==='ゲスト') shop[store].guest+=n;
-       else                shop[store].free +=n;
+      const store=m[1].replace(/22-1/gi,'').trim();
+      shop[store]=shop[store]||{guest:0,free:0};
+      if(m[2]==='ゲスト') shop[store].guest+=n;
+      else                shop[store].free +=n;
     }
   });
 
-  /* フリー行保証 */
+  /* フリー行無ければ追加 */
   if(!map.has('フリー')) map.set('フリー',0);
 
-  list=[...map.entries()].map(([label,cnt])=>({label,cnt}))
-                         .sort((a,b)=>key(a.label).localeCompare(key(b.label),'ja')||
+  rows=[...map.entries()].map(([label,cnt])=>({label,cnt}))
+                         .sort((a,b)=>sortKey(a.label).localeCompare(sortKey(b.label),'ja')||
                                       a.label.localeCompare(b.label,'ja'));
 }
 
-/* テーブル */
+/* 表描画 */
 function buildTable(){
   tbody.innerHTML='';
-  list.forEach(o=>{
+  rows.forEach(r=>{
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${o.label}</td><td>${o.cnt}</td>`;
+    tr.innerHTML=`<td>${r.label}</td><td>${r.cnt}</td>`;
     tbody.appendChild(tr);
   });
 }
 
 /* 本文 */
 function buildBig(){
-  let txt='キャッシャー〆\n\n';
-  txt+=`総数:${total}(外国人${foreign}名)\n`;
-  txt+=`M:${male} W:${female}\n\n`;
-  txt+=`Door                :  ${door.toString().padStart(4)}\n`;
-  txt+=`外国人Door             :  ${fdoor.toString().padStart(4)}\n`;
-  txt+=`22:00-1:00 Door     :  ${doorLate.toString().padStart(4)}\n`;
-  txt+=`22:00-1:00 外国人Door  :  ${fdoorLate.toString().padStart(4)}\n\n`;
+  let out='キャッシャー〆\n\n';
+  out+=`総数:${total}(外国人${foreign}名)\n`;
+  out+=`M:${male} W:${female}\n\n`;
+  out+=`Door                :  ${door.toString().padStart(4)}\n`;
+  out+=`外国人Door             :  ${fdoor.toString().padStart(4)}\n`;
+  out+=`22:00-1:00 Door     :  ${doorLate.toString().padStart(4)}\n`;
+  out+=`22:00-1:00 外国人Door  :  ${fdoorLate.toString().padStart(4)}\n\n`;
 
-  txt+='【店舗ゲスト/フリー】\n';
+  out+='【店舗ゲスト/フリー】\n';
   Object.keys(shop).forEach(s=>{
     const g=shop[s].guest||0,f=shop[s].free||0;
-    txt+=`${s}\n　${g+f}(ゲスト${g}フリー${f})\n`;
+    out+=`${s}\n　${g+f}(ゲスト${g}フリー${f})\n`;
   });
 
-  document.getElementById('big').textContent=txt;
+  document.getElementById('big').textContent=out;
 }
 
 /* コピー */
 function copyTxt(){
   navigator.clipboard.writeText(document.getElementById('big').textContent)
-    .then(()=>alert('コピー完了！')).catch(()=>alert('コピー失敗…'));
+    .then(()=>alert('コピー完了！'))
+    .catch(()=>alert('コピー失敗…'));
 }
 </script>
 </body>
