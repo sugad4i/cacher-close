@@ -1,121 +1,226 @@
-<index html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>集計サイト</title>
+  <title>キャッシャー集計 ver0.4.2</title>
+  <style>
+    #header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px;
+      background-color: #f0f0f0;
+      border-bottom: 1px solid #ccc;
+    }
+    #header h1 {
+      margin: 0;
+      font-size: 24px;
+    }
+    #header span {
+      font-size: 14px;
+      color: #666;
+    }
+    #output {
+      margin-top: 30px;
+      white-space: pre;
+      font-family: monospace;
+    }
+    input[type="number"] {
+      width: 40px;
+      text-align: center;
+    }
+    #copyButton {
+      margin-top: 20px;
+      padding: 10px 20px;
+      font-size: 16px;
+    }
+  </style>
 </head>
 <body>
 
-<h1>CSV集計ツール</h1>
+<div id="header">
+  <h1>キャッシャー集計 ver0.4.2</h1>
+  <span>更新日: 2025/04/27</span>
+</div>
+
 <input type="file" id="csvFileInput" accept=".csv" />
 
 <div id="output"></div>
 
+<button id="copyButton" onclick="copyText()">コピー</button>
+
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
 <script>
+let shopData = {};
+let summaryData = {};
+
 document.getElementById('csvFileInput').addEventListener('change', function(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: function(results) {
-            const data = results.data;
-            processData(data);
-        }
-    });
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const text = new TextDecoder('shift-jis').decode(e.target.result);
+
+        Papa.parse(text, {
+            header: true,
+            skipEmptyLines: true,
+            complete: function(results) {
+                const data = results.data;
+                processData(data);
+            }
+        });
+    };
+    reader.readAsArrayBuffer(file);
 });
 
+function getYesterdayDate() {
+    const today = new Date();
+    today.setDate(today.getDate() - 1);
+    const y = today.getFullYear();
+    const m = today.getMonth() + 1;
+    const d = today.getDate();
+    return `${y}/${m}/${d}`;
+}
+
+function padRight(str, length) {
+    return (str + ' '.repeat(length)).slice(0, length);
+}
+
+function padLeft(str, length) {
+    str = String(str);
+    return ' '.repeat(length - str.length) + str;
+}
+
 function processData(data) {
-    let totalCount = 0;
-    let foreignCount = 0;
-    let maleCount = 0;
-    let femaleCount = 0;
+    if (!data || data.length === 0) {
+        document.getElementById('output').innerText = 'データが空です';
+        return;
+    }
+
     let door = 0;
     let foreignDoor = 0;
     let doorLate = 0;
     let foreignDoorLate = 0;
-    let shopGuest = 0;
-    let shopFree = 0;
-    let shops = {};
+    let total = 0;
+    let maleTotal = 0;
+    let femaleTotal = 0;
+    let foreignTotal = 0;
+    shopData = {};
+
+    let countColumn = null;
+    for (const key of Object.keys(data[0])) {
+        if (key.replace(/\s/g, '').includes('販売商品数')) {
+            countColumn = key;
+            break;
+        }
+    }
+    if (!countColumn) {
+        document.getElementById('output').innerText = '販売商品数の列が見つかりません';
+        return;
+    }
 
     data.forEach(row => {
-        const shop = row['商品名']?.trim();
-        const count = parseInt(row['売上数']) || 0;
+        const originalItem = row['商品名']?.trim();
+        if (!originalItem) return;
+        if (originalItem.includes('再入場')) return; // 再入場は完全除外
 
-        if (!shop || isNaN(count)) return;
+        const count = parseFloat(row[countColumn]) || 0;
+        const itemFixed = originalItem.replace(/22~1/g, '22-1');
+        const normalizedItem = itemFixed.replace(/^22-1\s*/, '');
 
-        if (shop.includes('男性')) {
-            maleCount += count;
-            totalCount += count;
-        } else if (shop.includes('女性')) {
-            femaleCount += count;
-            totalCount += count;
+        total += count;
+
+        if (itemFixed.includes('G男性') || itemFixed.includes('G女性')) {
+            foreignTotal += count;
         }
 
-        if (shop.includes('G男性') || shop.includes('G女性')) {
-            foreignCount += count;
+        if (itemFixed.includes('男性')) {
+            maleTotal += count;
+        }
+        if (itemFixed.includes('女性')) {
+            femaleTotal += count;
         }
 
-        if (shop.includes('Door')) {
-            if (shop.includes('22')) {
+        if (itemFixed.includes('G男性') || itemFixed.includes('G女性')) {
+            if (itemFixed.includes('22-1')) {
+                foreignDoorLate += count;
+            } else {
+                foreignDoor += count;
+            }
+        } else if (itemFixed.includes('男性') || itemFixed.includes('ローカルG男性') || itemFixed.includes('女性') || itemFixed.includes('ローカルG女性')) {
+            if (itemFixed.includes('22-1')) {
                 doorLate += count;
             } else {
                 door += count;
             }
         }
 
-        if (shop.includes('外国人Door')) {
-            if (shop.includes('22')) {
-                foreignDoorLate += count;
-            } else {
-                foreignDoor += count;
+        const shopMatch = normalizedItem.match(/^(.+?)(ゲスト|フリー)(男性|女性)?$/);
+        if (shopMatch) {
+            const shopName = shopMatch[1].trim();
+            const type = shopMatch[2];
+            shopData[shopName] = shopData[shopName] || { guest: 0, free: 0 };
+            if (type === 'ゲスト') {
+                shopData[shopName].guest += count;
             }
-        }
-
-        if (shop.includes('店ゲスト')) {
-            shopGuest += count;
-        }
-        if (shop.includes('店Free')) {
-            shopFree += count;
-        }
-
-        // 店舗名ごとのゲスト／フリーカウント
-        const match = shop.match(/^(.+?)ゲスト(男性|女性)?$/);
-        if (match) {
-            const storeName = match[1];
-            shops[storeName] = shops[storeName] || { guest: 0, free: 0 };
-            shops[storeName].guest += count;
-            return;
-        }
-        const matchFree = shop.match(/^(.+?)フリー(男性|女性)?$/);
-        if (matchFree) {
-            const storeName = matchFree[1];
-            shops[storeName] = shops[storeName] || { guest: 0, free: 0 };
-            shops[storeName].free += count;
-            return;
         }
     });
 
-    // 出力作成
+    summaryData = { total, foreignTotal, maleTotal, femaleTotal, door, foreignDoor, doorLate, foreignDoorLate };
+
+    generateOutput();
+}
+
+function generateOutput() {
     let html = '';
 
-    html += `<h2>総数:${totalCount} (外国人${foreignCount}人)</h2>`;
-    html += `<p>M:${maleCount} W:${femaleCount}</p>`;
-    html += `<p>Door:${door}</p>`;
-    html += `<p>外国人Door:${foreignDoor}</p>`;
-    html += `<p>22〜1:00 Door:${doorLate}</p>`;
-    html += `<p>22〜1:00 外国人Door:${foreignDoorLate}</p>`;
-    html += `<p>店ゲスト:${shopGuest}</p>`;
-    html += `<p>店Free:${shopFree}</p>`;
+    html += 'キャッシャー集計\n\n';
+    html += `${getYesterdayDate()}\n\n`;
 
-    for (const [shopName, { guest, free }] of Object.entries(shops)) {
-        html += `<h3>${shopName}</h3>`;
-        html += `<p>${guest + free} (ゲスト${guest} フリー${free})</p>`;
+    html += `総数:${Math.round(summaryData.total)}(外国人${Math.round(summaryData.foreignTotal)}人)\n`;
+    html += `M:${Math.round(summaryData.maleTotal)} W:${Math.round(summaryData.femaleTotal)}\n\n`;
+
+    html += `${padRight('Door', 20)}: ${padLeft(Math.round(summaryData.door), 4)}\n`;
+    html += `${padRight('外国人Door', 20)}: ${padLeft(Math.round(summaryData.foreignDoor), 4)}\n`;
+    html += `${padRight('22:00-1:00 Door', 20)}: ${padLeft(Math.round(summaryData.doorLate), 4)}\n`;
+    html += `${padRight('22:00-1:00 外国人Door', 20)}: ${padLeft(Math.round(summaryData.foreignDoorLate), 4)}\n`;
+    html += `${padRight('店ゲスト', 20)}: [<input type="number" id="shopGuestInput" value="0" onchange="updateTotal()">]\n`;
+    html += `${padRight('店フリー', 20)}: [<input type="number" id="shopFreeInput" value="0" onchange="updateTotal()">]\n\n`;
+
+    for (const [shop, { guest }] of Object.entries(shopData)) {
+        const id = shop.replace(/\s+/g, '_');
+        html += `${shop}\n　<span id="total_${id}">${guest}</span>（ゲスト${padLeft(guest, 3)} フリー[<input type="number" id="free_${id}" value="0" onchange="updateShopTotal('${id}', ${guest})">]）\n\n`;
     }
 
     document.getElementById('output').innerHTML = html;
+}
+
+function updateTotal() {
+    // 特に使わないが今後拡張用
+}
+
+function updateShopTotal(id, guest) {
+    const free = parseInt(document.getElementById(`free_${id}`).value) || 0;
+    const total = guest + free;
+    document.getElementById(`total_${id}`).innerText = total;
+}
+
+function copyText() {
+    let text = '';
+    const output = document.getElementById('output');
+
+    output.querySelectorAll('input[type="number"]').forEach(input => {
+        input.outerHTML = input.value;
+    });
+
+    text = output.innerText;
+
+    navigator.clipboard.writeText(text).then(function() {
+        alert('コピー完了！');
+    }, function(err) {
+        alert('コピー失敗...');
+    });
 }
 </script>
 
