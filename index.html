@@ -2,11 +2,10 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>キャッシャー集計 ver4.9.1</title>
+<title>キャッシャー集計 ver4.9.2</title>
 <style>
  body{font-family:monospace;margin:20px}
- #head{display:flex;justify-content:space-between;align-items:center;
-       border-bottom:1px solid #ccc;padding-bottom:8px}
+ #head{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #ccc;padding-bottom:8px}
  #tbl{border-collapse:collapse;margin-top:14px;display:none}
  th,td{border:1px solid #aaa;padding:4px 8px}
  th{background:#eee}
@@ -18,7 +17,7 @@
 <body>
 
 <div id="head">
-  <h1>キャッシャー集計 ver4.9.1</h1>
+  <h1>キャッシャー集計 ver4.9.2</h1>
   <span id="upd"></span>
 </div>
 
@@ -34,43 +33,44 @@
 
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
 <script>
-/* ------------------ util ------------------ */
+/* ---------------- util ---------------- */
 document.getElementById('upd').textContent =
   '更新 ' + new Date().toLocaleDateString();
-
 const tbody   = document.querySelector('#tbl tbody');
 const summary = document.getElementById('summary');
-const norm = s => s.replace(/22~1/g,'22-1').replace(/[ \u3000\t]+/g,' ').trim();
+const norm    = s => s.replace(/22~1/g,'22-1').replace(/[ \u3000\t]+/g,' ').trim();
 
-const sortKey = l => l.startsWith('22-1')?'0'+l:l.includes('フリー')?'2'+l:'1'+l;
+/* 並びキー */
+const sKey = l => l.startsWith('22-1') ? '0'+l : l.includes('フリー') ? '2'+l : '1'+l;
 
-/* ------------------ 集計用 ------------------ */
+/* 集計変数 */
 let rows=[],door=0,fdoor=0,doorLate=0,fdoorLate=0;
 let total=0,foreign=0,male=0,female=0;
-const shop={};   // name → {guest, free, freeInp}
+const shop={};
 
-/* ------------------ CSV ------------------ */
+/* ------------- CSV 読み込み ------------- */
 document.getElementById('csv').addEventListener('change',e=>{
   const file=e.target.files[0]; if(!file) return;
-  file.arrayBuffer().then(buf=>{
-    const txt=new TextDecoder('shift-jis').decode(buf);
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const txt=new TextDecoder('shift-jis').decode(ev.target.result);
     Papa.parse(txt,{header:true,skipEmptyLines:true,complete:r=>{
-      parseCSV(r.data);
-      buildTable();
-      buildSummary();
-      /* --- ここで必ず表示状態へ --- */
-      document.getElementById('tbl').style.display     = 'table';
-      summary.style.display                            = 'block';
-      document.getElementById('copy').style.display    = 'inline-block';
+       parseCSV(r.data);
+       buildTable();
+       buildSummary();
+       /* show blocks */
+       document.getElementById('tbl').style.display='table';
+       summary.style.display='block';
+       document.getElementById('copy').style.display='inline-block';
     }});
-  });
+  };
+  reader.readAsArrayBuffer(file);
 });
 
-/* ------------------ 解析 ------------------ */
+/* ------------- 解析 ------------- */
 function parseCSV(data){
   rows=[];door=fdoor=doorLate=fdoorLate=0;
-  total=foreign=male=female=0;
-  Object.keys(shop).forEach(k=>delete shop[k]);
+  total=foreign=male=female=0; Object.keys(shop).forEach(k=>delete shop[k]);
 
   const col=data[0]&&Object.keys(data[0]).find(k=>k.replace(/\s/g,'').includes('販売商品数'));
   const map=new Map();
@@ -78,22 +78,20 @@ function parseCSV(data){
   data.forEach(r=>{
     const cat = norm(r['カテゴリー']||'');
     const nm  = norm(r['商品名']   ||'');
-    const n   = +r[col]||0;
-    if(!n||cat==='その他') return;
+    const n   = +r[col]||0; if(!n||cat==='その他') return;
 
-    /* --- Door 集計 --- */
+    /* Door集計 */
     if(['ローカル男性','ローカル女性','ローカルG男性','ローカルG女性'].includes(cat)) door+=n;
     if(['観光','観光 男性','観光 女性'].includes(cat))                                   fdoor+=n;
-    if(['22-1 男性','22-1 女性',
-        '22-1 ローカル男性','22-1 ローカル女性',
-        '22-1 ローカルG男性','22-1 ローカルG女性'].includes(cat))                       doorLate+=n;
+    if(['22-1 男性','22-1 女性','22-1 ローカル男性','22-1 ローカル女性',
+        '22-1 ローカルG男性','22-1 ローカルG女性'].includes(cat))                        doorLate+=n;
     if(['22-1 観光','22-1 観光 男性','22-1 観光 女性'].includes(cat))                    fdoorLate+=n;
 
-    /* テーブル行 */
+    /* テーブル */
     const label=cat||nm;
     map.set(label,(map.get(label)||0)+n);
 
-    /* M / W */
+    /* M/W */
     if(nm.includes('男性')) male+=n; else if(nm.includes('女性')) female+=n;
 
     total+=n; if(cat.includes('観光')||cat.includes('外国人')) foreign+=n;
@@ -110,11 +108,11 @@ function parseCSV(data){
   if(!map.has('フリー')) map.set('フリー',0);
 
   rows=[...map.entries()].map(([l,c])=>({l,c}))
-       .sort((a,b)=>sortKey(a.l).localeCompare(sortKey(b.l),'ja')||
+       .sort((a,b)=>sKey(a.l).localeCompare(sKey(b.l),'ja')||
                     a.l.localeCompare(b.l,'ja'));
 }
 
-/* ------------------ 表 ------------------ */
+/* ------------- 表 ------------- */
 function buildTable(){
   tbody.innerHTML='';
   rows.forEach(r=>{
@@ -124,7 +122,7 @@ function buildTable(){
   });
 }
 
-/* ------------------ Summary & Inputs ------------------ */
+/* ------------- Summary & 入力 ------------- */
 function buildSummary(){
   let html='';
   html+=`総数:${total}(外国人${foreign}名)\n`;
@@ -147,7 +145,6 @@ function buildSummary(){
   /* 入力イベント */
   document.getElementById('sg').oninput=updateCopy;
   document.getElementById('sf').oninput=updateCopy;
-
   Object.keys(shop).forEach(s=>{
     const id=`fi_${btoa(unescape(encodeURIComponent(s))).replace(/=+$/,'')}`;
     document.getElementById(id).oninput=e=>{
@@ -159,7 +156,7 @@ function buildSummary(){
   updateCopy();
 }
 
-/* ------------------ コピー本文 ------------------ */
+/* ------------- コピー本文 ------------- */
 function updateCopy(){
   const sg=+document.getElementById('sg').value||0;
   const sf=+document.getElementById('sf').value||0;
