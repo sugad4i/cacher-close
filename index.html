@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>キャッシャー集計 ver1.02</title>
+<title>キャッシャー集計 ver1.06</title>
 <style>
   body{font-family:monospace;margin:20px}
   #head{display:flex;justify-content:space-between;align-items:center;
@@ -22,14 +22,14 @@
 <body>
 
 <div id="head">
-  <h1>キャッシャー集計 ver1.02</h1>
+  <h1>キャッシャー集計 ver1.06</h1>
   <span id="upd"></span>
 </div>
 
 <!-- ----- 上部金額 ----- -->
 <div id="yenBox">
-  
-  総売上: <span id="yenCsv">0</span> 円
+  手入力×人数 合計: <span id="yenInput">0</span> 円<br>
+  CSV販売総売上合計: <span id="yenCsv">0</span> 円
   <div id="warn"></div>
 </div>
 
@@ -71,11 +71,11 @@ const norm = s=>s.replace(/22~1/g,'22-1').replace(/[ \u3000\t]+/g,' ').trim();
 
 /* ===== 並び順 ===== */
 const order22 = [
-  '22-1 ローカル男性','22-1 ローカル女性',
-  '22-1 ローカルG男性','22-1 ローカルG女性',
+  '22-1 ローカル男性','22-1 ローカルG男性',
+  '22-1 ローカル女性','22-1 ローカルG女性',
   '22-1 男性','22-1 女性',
-  '22-1 ローカル男性ゲスト','22-1 ローカル女性ゲスト',
-  '22-1 ローカルG男性ゲスト','22-1 ローカルG女性ゲスト',
+  '22-1 ローカル男性ゲスト','22-1 ローカルG男性ゲスト',
+  '22-1 ローカル女性ゲスト','22-1 ローカルG女性ゲスト',
   '22-1 男性ゲスト','22-1 女性ゲスト',
   '22-1 G男性ゲスト','22-1 G女性ゲスト',
   '22-1 ローカルゲストG男性','22-1 ローカルゲストG女性',
@@ -83,10 +83,10 @@ const order22 = [
 ];
 
 const orderNorm = [
-  '男性','ローカル男性','ローカル女性',
-  '女性','ローカルG男性','ローカルG女性',
-  'ローカル男性ゲスト','ローカル女性ゲスト',
-  'ローカルG男性ゲスト','ローカルG女性ゲスト',
+  '男性','ローカル男性','ローカルG男性',
+  '女性','ローカル女性','ローカルG女性',
+  'ローカル男性ゲスト','ローカルG男性ゲスト',
+  'ローカル女性ゲスト','ローカルG女性ゲスト',
   'ローカルゲスト男性','ローカルゲスト女性',
   'ローカルG男性ゲスト','ローカルG女性ゲスト',
   'ローカルゲストG男性','ローカルゲストG女性',
@@ -327,7 +327,7 @@ function calcMoney(){
   yenSpanI.textContent=sum.toLocaleString();
   yenSpanC.textContent=saleSum.toLocaleString();
   warnBox.textContent = (sum!==saleSum)
-    ? `⚠️ 値が正しくないか，エラーが発生しています`
+    ? `⚠️ 種類別合計（${sum.toLocaleString()}円）と CSV売上（${saleSum.toLocaleString()}円）が一致しません`
     : '';
 }
 
