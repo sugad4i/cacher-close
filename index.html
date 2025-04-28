@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>キャッシャー集計 ver4.9</title>
+<title>キャッシャー集計 ver4.9.1</title>
 <style>
  body{font-family:monospace;margin:20px}
  #head{display:flex;justify-content:space-between;align-items:center;
@@ -18,7 +18,7 @@
 <body>
 
 <div id="head">
-  <h1>キャッシャー集計 ver4.9</h1>
+  <h1>キャッシャー集計 ver4.9.1</h1>
   <span id="upd"></span>
 </div>
 
@@ -34,6 +34,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
 <script>
+/* ------------------ util ------------------ */
 document.getElementById('upd').textContent =
   '更新 ' + new Date().toLocaleDateString();
 
@@ -41,145 +42,151 @@ const tbody   = document.querySelector('#tbl tbody');
 const summary = document.getElementById('summary');
 const norm = s => s.replace(/22~1/g,'22-1').replace(/[ \u3000\t]+/g,' ').trim();
 
-/* 並びキー */
-const sKey = l => l.startsWith('22-1')?'0'+l:l.includes('フリー')?'2'+l:'1'+l;
+const sortKey = l => l.startsWith('22-1')?'0'+l:l.includes('フリー')?'2'+l:'1'+l;
 
-/* 集計用 */
+/* ------------------ 集計用 ------------------ */
 let rows=[],door=0,fdoor=0,doorLate=0,fdoorLate=0;
-let tot=0,foreign=0,male=0,female=0;
-const shop={}; // name→{guest,free,freeInp}
+let total=0,foreign=0,male=0,female=0;
+const shop={};   // name → {guest, free, freeInp}
 
-/* CSV */
+/* ------------------ CSV ------------------ */
 document.getElementById('csv').addEventListener('change',e=>{
- const f=e.target.files[0]; if(!f) return;
- f.arrayBuffer().then(buf=>{
-  const txt=new TextDecoder('shift-jis').decode(buf);
-  Papa.parse(txt,{header:true,skipEmptyLines:true,complete:r=>{
-    parseCSV(r.data);
-    buildTable();
-    buildSummary();
-    document.getElementById('tbl').style.display='';
-    summary.style.display='';
-    document.getElementById('copy').style.display='';
-  }});
- });
+  const file=e.target.files[0]; if(!file) return;
+  file.arrayBuffer().then(buf=>{
+    const txt=new TextDecoder('shift-jis').decode(buf);
+    Papa.parse(txt,{header:true,skipEmptyLines:true,complete:r=>{
+      parseCSV(r.data);
+      buildTable();
+      buildSummary();
+      /* --- ここで必ず表示状態へ --- */
+      document.getElementById('tbl').style.display     = 'table';
+      summary.style.display                            = 'block';
+      document.getElementById('copy').style.display    = 'inline-block';
+    }});
+  });
 });
 
-/* 解析 */
+/* ------------------ 解析 ------------------ */
 function parseCSV(data){
- rows=[];door=fdoor=doorLate=fdoorLate=0;
- tot=foreign=male=female=0; Object.keys(shop).forEach(k=>delete shop[k]);
+  rows=[];door=fdoor=doorLate=fdoorLate=0;
+  total=foreign=male=female=0;
+  Object.keys(shop).forEach(k=>delete shop[k]);
 
- const col=data[0]&&Object.keys(data[0]).find(k=>k.replace(/\s/g,'').includes('販売商品数'));
- const map=new Map();
+  const col=data[0]&&Object.keys(data[0]).find(k=>k.replace(/\s/g,'').includes('販売商品数'));
+  const map=new Map();
 
- data.forEach(r=>{
-  const cat = norm(r['カテゴリー']||'');
-  const name= norm(r['商品名']||'');
-  const n=+r[col]||0; if(!n) return;
-  if(cat==='その他') return;
+  data.forEach(r=>{
+    const cat = norm(r['カテゴリー']||'');
+    const nm  = norm(r['商品名']   ||'');
+    const n   = +r[col]||0;
+    if(!n||cat==='その他') return;
 
-  /* Door */
-  if(['ローカル男性','ローカル女性','ローカルG男性','ローカルG女性'].includes(cat)) door+=n;
-  if(['観光','観光 男性','観光 女性'].includes(cat))                                   fdoor+=n;
-  if(['22-1 男性','22-1 女性','22-1 ローカル男性','22-1 ローカル女性','22-1 ローカルG男性','22-1 ローカルG女性'].includes(cat)) doorLate+=n;
-  if(['22-1 観光','22-1 観光 男性','22-1 観光 女性'].includes(cat))                    fdoorLate+=n;
+    /* --- Door 集計 --- */
+    if(['ローカル男性','ローカル女性','ローカルG男性','ローカルG女性'].includes(cat)) door+=n;
+    if(['観光','観光 男性','観光 女性'].includes(cat))                                   fdoor+=n;
+    if(['22-1 男性','22-1 女性',
+        '22-1 ローカル男性','22-1 ローカル女性',
+        '22-1 ローカルG男性','22-1 ローカルG女性'].includes(cat))                       doorLate+=n;
+    if(['22-1 観光','22-1 観光 男性','22-1 観光 女性'].includes(cat))                    fdoorLate+=n;
 
-  /* テーブル行 */
-  const label=cat||name;
-  map.set(label,(map.get(label)||0)+n);
+    /* テーブル行 */
+    const label=cat||nm;
+    map.set(label,(map.get(label)||0)+n);
 
-  /* M/W */
-  if(name.includes('男性')) male+=n; else if(name.includes('女性')) female+=n;
+    /* M / W */
+    if(nm.includes('男性')) male+=n; else if(nm.includes('女性')) female+=n;
 
-  /* totals */
-  tot+=n; if(cat.includes('観光')||cat.includes('外国人')) foreign+=n;
+    total+=n; if(cat.includes('観光')||cat.includes('外国人')) foreign+=n;
 
-  /* 店舗 g/f */
-  const m=name.match(/^(.+?)(ゲスト|フリー)/);
-  if(m){
-    const store=m[1].replace(/22-1/gi,'').trim();
-    shop[store]=shop[store]||{guest:0,free:0,freeInp:0};
-    if(m[2]==='ゲスト') shop[store].guest+=n; else shop[store].free+=n;
-  }
- });
+    /* 店舗 */
+    const m=nm.match(/^(.+?)(ゲスト|フリー)/);
+    if(m){
+      const st=m[1].replace(/22-1/gi,'').trim();
+      shop[st]=shop[st]||{guest:0,free:0,freeInp:0};
+      if(m[2]==='ゲスト') shop[st].guest+=n; else shop[st].free+=n;
+    }
+  });
 
- if(!map.has('フリー')) map.set('フリー',0);
- rows=[...map.entries()].map(([l,c])=>({l,c}))
-      .sort((a,b)=>sKey(a.l).localeCompare(sKey(b.l),'ja')||a.l.localeCompare(b.l,'ja'));
+  if(!map.has('フリー')) map.set('フリー',0);
+
+  rows=[...map.entries()].map(([l,c])=>({l,c}))
+       .sort((a,b)=>sortKey(a.l).localeCompare(sortKey(b.l),'ja')||
+                    a.l.localeCompare(b.l,'ja'));
 }
 
-/* 表 */
+/* ------------------ 表 ------------------ */
 function buildTable(){
- tbody.innerHTML='';
- rows.forEach(r=>{
-   const tr=document.createElement('tr');
-   tr.innerHTML=`<td>${r.l}</td><td>${r.c}</td>`;
-   tbody.appendChild(tr);
- });
+  tbody.innerHTML='';
+  rows.forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${r.l}</td><td>${r.c}</td>`;
+    tbody.appendChild(tr);
+  });
 }
 
-/* Summary + inputs */
+/* ------------------ Summary & Inputs ------------------ */
 function buildSummary(){
- let html='';
- html+=`総数:${tot}(外国人${foreign}名)\n`;
- html+=`M:${male} W:${female}\n\n`;
- html+=`Door                :    ${door}\n`;
- html+=`外国人Door             :    ${fdoor}\n`;
- html+=`22:00-1:00 Door     :    ${doorLate}\n`;
- html+=`22:00-1:00 外国人Door  :    ${fdoorLate}\n\n`;
+  let html='';
+  html+=`総数:${total}(外国人${foreign}名)\n`;
+  html+=`M:${male} W:${female}\n\n`;
+  html+=`Door                :    ${door}\n`;
+  html+=`外国人Door             :    ${fdoor}\n`;
+  html+=`22:00-1:00 Door     :    ${doorLate}\n`;
+  html+=`22:00-1:00 外国人Door  :    ${fdoorLate}\n\n`;
+  html+=`店ゲスト          <input type="number" id="sg" value="0" style="width:60px">\n`;
+  html+=`店フリー           <input type="number" id="sf" value="0" style="width:60px">\n\n`;
+  html+='【店舗ゲスト/フリー】\n';
 
- html+=`店ゲスト          <input type="number" id="sg" value="0" style="width:60px">\n`;
- html+=`店フリー           <input type="number" id="sf" value="0" style="width:60px">\n\n`;
+  Object.keys(shop).forEach(s=>{
+    const id=`fi_${btoa(unescape(encodeURIComponent(s))).replace(/=+$/,'')}`;
+    html+=`${s}\n　${shop[s].guest+shop[s].free}(ゲスト${shop[s].guest} フリー <input type="number" id="${id}" value="0" style="width:60px">)\n`;
+  });
 
- html+='【店舗ゲスト/フリー】\n';
- Object.keys(shop).forEach(s=>{
-   const id=`fi_${btoa(unescape(encodeURIComponent(s))).replace(/=+$/,'')}`;
-   html+=`${s}\n　${shop[s].guest+shop[s].free}<span>(ゲスト${shop[s].guest} フリー <input type="number" id="${id}" value="0" style="width:60px">)</span>\n`;
- });
- summary.innerHTML=html;
+  summary.innerHTML=html;
 
- /* input events */
- document.getElementById('sg').oninput=copyUpdate;
- document.getElementById('sf').oninput=copyUpdate;
- Object.keys(shop).forEach(s=>{
-   const id=`fi_${btoa(unescape(encodeURIComponent(s))).replace(/=+$/,'')}`;
-   document.getElementById(id).oninput=e=>{
-     shop[s].freeInp=+e.target.value||0;
-     copyUpdate();
-   };
- });
- copyUpdate();
+  /* 入力イベント */
+  document.getElementById('sg').oninput=updateCopy;
+  document.getElementById('sf').oninput=updateCopy;
+
+  Object.keys(shop).forEach(s=>{
+    const id=`fi_${btoa(unescape(encodeURIComponent(s))).replace(/=+$/,'')}`;
+    document.getElementById(id).oninput=e=>{
+      shop[s].freeInp=+e.target.value||0;
+      updateCopy();
+    };
+  });
+
+  updateCopy();
 }
 
-/* Build copy text */
-function copyUpdate(){
- const sg=+document.getElementById('sg').value||0;
- const sf=+document.getElementById('sf').value||0;
+/* ------------------ コピー本文 ------------------ */
+function updateCopy(){
+  const sg=+document.getElementById('sg').value||0;
+  const sf=+document.getElementById('sf').value||0;
 
- let out='キャッシャー〆\n\n';
- out+=`総数:${tot}(外国人${foreign}名)\n`;
- out+=`M:${male} W:${female}\n\n`;
- out+=`Door                :    ${door}\n`;
- out+=`外国人Door             :    ${fdoor}\n`;
- out+=`22:00-1:00 Door     :    ${doorLate}\n`;
- out+=`22:00-1:00 外国人Door  :    ${fdoorLate}\n\n`;
- out+=`店ゲスト          ${sg}\n`;
- out+=`店フリー           ${sf}\n\n`;
- out+='【店舗ゲスト/フリー】\n';
- Object.keys(shop).forEach(s=>{
-   const g=shop[s].guest;
-   const f=shop[s].free + shop[s].freeInp;
-   out+=`${s}\n　${g+f}(ゲスト${g} フリー ${shop[s].freeInp})\n`;
- });
+  let out='キャッシャー〆\n\n';
+  out+=`総数:${total}(外国人${foreign}名)\n`;
+  out+=`M:${male} W:${female}\n\n`;
+  out+=`Door                :    ${door}\n`;
+  out+=`外国人Door             :    ${fdoor}\n`;
+  out+=`22:00-1:00 Door     :    ${doorLate}\n`;
+  out+=`22:00-1:00 外国人Door  :    ${fdoorLate}\n\n`;
+  out+=`店ゲスト          ${sg}\n`;
+  out+=`店フリー           ${sf}\n\n`;
+  out+='【店舗ゲスト/フリー】\n';
+  Object.keys(shop).forEach(s=>{
+    const g=shop[s].guest;
+    const f=shop[s].free + shop[s].freeInp;
+    out+=`${s}\n　${g+f}(ゲスト${g} フリー ${shop[s].freeInp})\n`;
+  });
 
- document.getElementById('big').textContent=out;
+  document.getElementById('big').textContent=out;
 }
 
 /* コピー */
 function copyTxt(){
- navigator.clipboard.writeText(document.getElementById('big').textContent)
-  .then(()=>alert('コピー完了！')).catch(()=>alert('コピー失敗…'));
+  navigator.clipboard.writeText(document.getElementById('big').textContent)
+    .then(()=>alert('コピー完了！')).catch(()=>alert('コピー失敗…'));
 }
 </script>
 </body>
