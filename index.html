@@ -28,8 +28,8 @@
 
 <!-- ----- 上部金額 ----- -->
 <div id="yenBox">
-  手入力×人数 合計: <span id="yenInput">0</span> 円<br>
-  CSV販売総売上合計: <span id="yenCsv">0</span> 円
+  
+  総売上: <span id="yenCsv">0</span> 円
   <div id="warn"></div>
 </div>
 
@@ -327,7 +327,7 @@ function calcMoney(){
   yenSpanI.textContent=sum.toLocaleString();
   yenSpanC.textContent=saleSum.toLocaleString();
   warnBox.textContent = (sum!==saleSum)
-    ? `⚠️ 種類別合計（${sum.toLocaleString()}円）と CSV売上（${saleSum.toLocaleString()}円）が一致しません`
+    ? `⚠️ 値が正しくないか，エラーが発生しています`
     : '';
 }
 
