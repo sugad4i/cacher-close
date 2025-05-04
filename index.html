@@ -371,6 +371,14 @@ function copyTxt(){
     const f=shop[s].free+shop[s].freeInp;
     txt+=${s}\n  ${g+f}(ゲスト${g} フリー ${shop[s].freeInp})\n;
   });
+  if(freeList.length){
+  txt += `\n【自由記入】\n`;
+  freeList.forEach(o=>{
+    const name = document.getElementById(o.nameId).value.trim()||'[無記名]';
+    const f    = +document.getElementById(o.numId).value||0;
+    txt += `${name}\n  ${f}(ゲスト0 フリー ${f})\n`;
+  });
+}
   navigator.clipboard.writeText(txt)
     .then(()=>alert('コピー完了！'))
     .catch(()=>alert('コピー失敗…'));
