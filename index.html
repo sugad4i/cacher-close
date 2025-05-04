@@ -2,35 +2,37 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>キャッシャー集計 ver1.07</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>キャッシャー集計 ver1.02</title>
 <link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="manifest.json">
 <style>
   body{font-family:monospace;margin:20px}
-  #head{display:flex;justify-content:space-between;align-items:center;
-        border-bottom:1px solid #ccc;padding-bottom:8px}
+  #head{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #ccc;padding-bottom:8px}
   table{border-collapse:collapse;margin-top:14px;width:100%}
   th,td{border:1px solid #aaa;padding:4px 8px;text-align:right}
   th{background:#eee;text-align:center}
   td:first-child,th:first-child{text-align:left}
   input[type=number]{width:70px;text-align:right}
+  input[type=text]{width:130px}
   #summary{white-space:pre;margin-top:18px}
   #yenBox{font-size:18px;font-weight:bold;margin:12px 0;line-height:1.4}
   #tplBox{margin-top:10px}
   #tplBox button{margin-right:8px}
   #warn{color:#c00;font-weight:bold;margin-top:4px}
+  #addBox{margin:14px 0}
 </style>
 </head>
 <body>
 
 <div id="head">
-  <h1>キャッシャー集計 ver1.07</h1>
+  <h1>キャッシャー集計 ver1.02</h1>
   <span id="upd"></span>
 </div>
 
-<!-- 金額表示 -->
 <div id="yenBox">
-  手入力×人数 合計: <span id="yenInput">0</span> 円<br>
-  CSV販売総売上合計: <span id="yenCsv">0</span> 円
+  手入力×人数 合計: <span id="yenInput">0</span> 円<br>
+  CSV販売総売上合計: <span id="yenCsv">0</span> 円
   <div id="warn"></div>
 </div>
 
@@ -38,78 +40,149 @@
 
 <div id="tplBox">
   <strong>テンプレ:</strong>
-  <button onclick="applyTpl('ARGO')">ARGO / WAYUP</button>
-  <button onclick="applyTpl('ENCORE')">ENCORE / LOYAL</button>
+  <button onclick="applyTpl('ARGO')">ARGO / WAYUP</button>
+  <button onclick="applyTpl('ENCORE')">ENCORE / LOYAL</button>
 </div>
 
 <table id="tbl">
   <thead>
-    <tr>
-      <th>カテゴリ / 商品名</th>
-      <th>人数</th>
-      <th>単価(円)</th>
-      <th>種類別合計(円)</th>
-    </tr>
+    <tr><th>カテゴリ / 商品名</th><th>人数</th><th>単価(円)</th><th>種類別合計(円)</th></tr>
   </thead>
   <tbody></tbody>
 </table>
 
 <div id="summary"></div>
-
-<!-- 自由記入追加 -->
-<div id="customAddBox">
-  <button onclick="addCustomEntry()">+1行追加</button>
-</div>
+<div id="addBox"><button onclick="addFreeLine()">+1 行追加</button></div>
 
 <button id="copy" onclick="copyTxt()">コピー</button>
 
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
 <script>
-let customEntries = [];
-function addCustomEntry(){
-  const idx = customEntries.length;
-  const nameId = `custom_name_${idx}`;
-  const freeId = `custom_free_${idx}`;
+/*****  util *****/
+document.getElementById('upd').textContent = '更新 '+new Date().toLocaleDateString();
+const $ = s => document.querySelector(s);
+const tbody   = $('#tbl tbody');
+const yenInp  = $('#yenInput');
+const yenCsv  = $('#yenCsv');
+const warnBox = $('#warn');
+const norm = s=>s.replace(/22~1/g,'22-1').replace(/[ \u3000\t]+/g,' ').trim();
 
-  const line = document.createElement('div');
-  line.innerHTML =
-    `<input id="${nameId}" placeholder="名前" style="width:120px">
-     (ゲスト0 フリー <input id="${freeId}" type="number" value="0" style="width:60px"> )`;
-  document.getElementById('summary').appendChild(line);
-
-  customEntries.push({ nameId, freeId });
+/***** 並び順テーブル *****/
+const order22=[
+  '22-1 ローカル男性','22-1 ローカル女性','22-1 ローカルG男性','22-1 ローカルG女性',
+  '22-1 男性','22-1 女性',
+  '22-1 ローカル男性ゲスト','22-1 ローカル女性ゲスト',
+  '22-1 ローカルG男性ゲスト','22-1 ローカルG女性ゲスト',
+  '22-1 男性ゲスト','22-1 女性ゲスト',
+  '22-1 G男性ゲスト','22-1 G女性ゲスト',
+  '22-1 ローカルゲストG男性','22-1 ローカルゲストG女性',
+  '22-1 観光 男性','22-1 観光 女性'
+];
+const orderNorm=[
+  '男性','女性','ローカル男性','ローカル女性','ローカルG男性','ローカルG女性',
+  'ローカル男性ゲスト','ローカル女性ゲスト','ローカルG男性ゲスト','ローカルG女性ゲスト',
+  'ローカルゲスト男性','ローカルゲスト女性','ローカルG男性ゲスト','ローカルG女性ゲスト',
+  'ローカルゲストG男性','ローカルゲストG女性','観光 男性','観光 女性'
+];
+function sKey(lbl){
+  if(lbl.startsWith('22-1')){const i=order22.indexOf(lbl);return '0'+(i>=0?String(i).padStart(2,'0'):'99')+lbl;}
+  if(lbl.includes('フリー')) return '2'+lbl;
+  const j=orderNorm.indexOf(lbl);return '1'+(j>=0?String(j).padStart(2,'0'):'99')+lbl;
 }
 
-function copyTxt(){
-  const sg=+document.getElementById('sg')?.value||0;
-  const sf=+document.getElementById('sf')?.value||0;
-  let txt='キャッシャー〆\n\n';
-  txt+=`総数:${total}(外国人${foreign}名)\n`;
-  txt+=`M:${male} W:${female}\n\n`;
-  txt+=`Door                :    ${door}\n`;
-  txt+=`外国人Door             :    ${fdoor}\n`;
-  txt+=`22:00-1:00 Door     :    ${doorLate}\n`;
-  txt+=`22:00-1:00 外国人Door  :    ${fdoorLate}\n\n`;
-  txt+=`店ゲスト          ${sg}\n`;
-  txt+=`店フリー           ${sf}\n\n`;
-  txt+='【店舗ゲスト/フリー】\n';
-  Object.keys(shop).forEach(s=>{
-    const g=shop[s].guest;
-    const f=shop[s].free+shop[s].freeInp;
-    txt+=`${s}\n  ${g+f}(ゲスト${g} フリー ${shop[s].freeInp})\n`;
+/***** 単価テンプレ *****/
+const basePrice = {
+  '22-1 ローカル男性':500,'22-1 ローカル女性':500,'22-1 ローカルG男性':500,'22-1 ローカルG女性':500,
+  '22-1 男性':500,'22-1 女性':500,
+  '22-1 ローカル男性ゲスト':500,'22-1 ローカル女性ゲスト':500,
+  '22-1 ローカルG男性ゲスト':500,'22-1 ローカルG女性ゲスト':500,
+  '22-1 男性ゲスト':500,'22-1 女性ゲスト':500,'22-1 G男性ゲスト':500,'22-1 G女性ゲスト':500,
+  '22-1 ローカルゲストG男性':500,'22-1 ローカルゲストG女性':500,
+  '22-1 観光 男性':500,'22-1 観光 女性':500,
+
+  '男性':2000,'ローカル男性':2000,'ローカルG男性':2000,
+  '女性':1000,'ローカル女性':1000,'ローカルG女性':1000,
+  'ローカル男性ゲスト':1500,'ローカルG男性ゲスト':1500,
+  'ローカル女性ゲスト':700,'ローカルG女性ゲスト':700,
+  'ローカルゲスト男性':1500,'ローカルゲスト女性':700,
+  'ローカルG男性ゲスト':1500,'ローカルG女性ゲスト':700,
+  'ローカルゲストG男性':1500,'ローカルゲストG女性':700,
+  '観光 男性':2000,'観光 女性':1000,
+
+  'フリー':0,'再入場':500,'靴':1000
+};
+const priceTpl={
+  ARGO  : {...basePrice},
+  ENCORE:{...basePrice,'観光 男性':3000,'観光 女性':2000}
+};
+
+/***** 自由記入 *****/
+const freeLines=[]; // {labelId,freeId}
+function addFreeLine(){
+  const i=freeLines.length;
+  const labelId=`freelabel_${i}`;
+  const freeId=`freeinp_${i}`;
+  freeLines.push({labelId,freeId});
+  $('#summary').insertAdjacentHTML('beforeend',
+    `<div><input id="${labelId}" type="text" placeholder="名前"> <span id="free_total_${i}">0</span>(ゲスト0 フリー <input id="${freeId}" type="number" value="0" style="width:60px" oninput="updateFree(${i})">)</div>`);
+}
+function updateFree(i){
+  const f=+$('#'+freeLines[i].freeId).value||0;
+  $('#free_total_'+i).textContent=f;
+}
+
+/***** 集計変数 *****/
+let rows=[],total=0,foreign=0,male=0,female=0;
+let door=0,fdoor=0,doorLate=0,fdoorLate=0,saleSum=0;
+const shop={};
+
+/***** CSV読み込み *****/
+$('#csv').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f) return;
+  new Response(f).arrayBuffer().then(buf=>{
+    const txt=new TextDecoder('shift-jis').decode(buf);
+    Papa.parse(txt,{header:true,skipEmptyLines:true,complete:r=>{
+      parseCSV(r.data);buildTable();buildSummary();calcMoney();
+    }});
   });
-  if(customEntries.length){
-    txt+='\n【自由記入】\n';
-    customEntries.forEach(e=>{
-      const name = document.getElementById(e.nameId)?.value || '[未記入]';
-      const f    = +document.getElementById(e.freeId)?.value || 0;
-      txt+=`${name}\n  ${f}(ゲスト0 フリー ${f})\n`;
-    });
-  }
-  navigator.clipboard.writeText(txt)
-    .then(()=>alert('コピー完了！'))
-    .catch(()=>alert('コピー失敗…'));
-}
-</script>
-</body>
-</html>
+});
+
+/***** CSV解析 *****/
+function parseCSV(data){
+  rows=[];total=foreign=male=female=0;door=fdoor=doorLate=fdoorLate=0;saleSum=0;
+  Object.keys(shop).forEach(k=>delete shop[k]);
+
+  const qtyCol = Object.keys(data[0]).find(k=>k.replace(/\s/g,'').includes('販売商品数'));
+  const retCol = Object.keys(data[0]).find(k=>k.replace(/\s/g,'').includes('返品商品数'));
+  const amtCol = Object.keys(data[0]).find(k=>k.replace(/\s/g,'').includes('販売総売上'));
+  const map=new Map();
+
+  data.forEach(r=>{
+    const rawCat=norm(r['カテゴリー']||'');
+    const nm=norm(r['商品名']||'');
+    let cat=rawCat;
+
+    /* ローカルG 判定 */
+    if(rawCat==='ローカル男性')        cat= nm.includes('G男性')?'ローカルG男性':'ローカル男性';
+    if(rawCat==='ローカル女性')        cat= nm.includes('G女性')?'ローカルG女性':'ローカル女性';
+    if(rawCat==='22-1 ローカル男性')  cat= nm.includes('G男性')?'22-1 ローカルG男性':'22-1 ローカル男性';
+    if(rawCat==='22-1 ローカル女性')  cat= nm.includes('G女性')?'22-1 ローカルG女性':'22-1 ローカル女性';
+
+    const isOther=(rawCat==='その他');
+    if(isOther) cat=nm;
+
+    if(cat==='観光')      cat+=' '+(nm.includes('女性')?'女性':'男性');
+    if(cat==='22-1 観光') cat+=' '+(nm.includes('女性')?'女性':'男性');
+
+    const n=Math.max(0,(+r[qtyCol]||0)-(+r[retCol]||0));
+    if(!n) return;
+
+    saleSum+=parseFloat(String(r[amtCol]||'0').replace(/,/g,''))||0;
+
+    map.set(cat,(map.get(cat)||0)+n);
+
+    if(isOther) return;
+
+    if(['ローカル男性','ローカル女性','ローカルG男性','ローカルG女性'].includes(cat)) door+=n;
+    if(['観光 男性','観光 女性'].includes(cat)) fdoor+=n;
+    if(['22-1 男
