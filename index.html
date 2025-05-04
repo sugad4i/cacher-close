@@ -364,13 +364,15 @@ Door                :    ${door}
 `;
   });
 
+  /* ▼ 自由記入ブロック */
   if(freeList.length){
-    txt += `\n【自由記入】\n`;
+    txt += '\n【自由記入】\n';
     freeList.forEach(o=>{
-      const name=document.getElementById(o.nameId).value.trim()||'[無記名]';
-      const f  =+document.getElementById(o.numId).value||0;
+      const name = document.getElementById(o.nameId).value.trim() || '[無記名]';
+      const f    = +document.getElementById(o.numId).value || 0;
+      const freeDisp = f ? f : '';             // 0 なら空欄
       txt += `${name}
-  ${f}(ゲスト0 フリー ${f})
+  ${f}(ゲスト0 フリー ${freeDisp})
 `;
     });
   }
