@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>キャッシャー集計 ver1.1</title>
+<title>キャッシャー集計 ver1.1.1</title>
 
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="theme-color" content="#ffffff">
@@ -27,7 +27,7 @@
 <body>
 
 <div id="head">
-  <h1>キャッシャー集計 ver1.1</h1>
+  <h1>キャッシャー集計 ver1.1.1</h1>
   <span id="upd"></span>
 </div>
 
@@ -340,9 +340,9 @@ function addFree(){
 }
 
 /* ===== コピー ===== */
-function copyTxt(){
-  const sg = +document.getElementById('sg').value||0;
-  const sf = +document.getElementById('sf').value||0;
+function copyTxt() {
+  const sg = +document.getElementById('sg').value || 0;
+  const sf = +document.getElementById('sf').value || 0;
 
   let txt =
 `キャッシャー〆
@@ -360,120 +360,55 @@ Door                :    ${door}
 
 【店舗ゲスト/フリー】
 `;
-  Object.keys(shop).forEach(s=>{
-    const g=shop[s].guest;
-    const f=shop[s].free+shop[s].freeInp;
+  Object.keys(shop).forEach(s => {
+    const g = shop[s].guest;
+    const f = shop[s].free + shop[s].freeInp;
     txt += `${s}
-  ${g+f}(ゲスト${g} フリー ${shop[s].freeInp})
+  ${g + f}(ゲスト${g} フリー ${shop[s].freeInp})
 `;
   });
 
   /* ▼ 自由記入ブロック */
-  if(freeList.length){
-    freeList.forEach(o=>{
+  if (freeList.length) {
+    freeList.forEach(o => {
       const name = document.getElementById(o.nameId).value.trim() || '[無記名]';
-      const f    = +document.getElementById(o.numId).value || 0;
-      const freeDisp = f ? f : '';             // 0 なら空欄
+      const f = +document.getElementById(o.numId).value || 0;
+      const freeDisp = f ? f : ''; // 0 なら空欄
       txt += `${name}
   ${f}(ゲスト0 フリー ${freeDisp})
 `;
     });
   }
 
-  navigator.clipboard.writeText(txt)
-    .then(()=>alert('コピー完了！'))
-    .catch(()=>alert('コピー失敗…'));
-}
+  // ファイル名から日付を取得（例: 商品別売上_20250427-20250428.csv → 20250427）
+  const fileInput = document.getElementById('csv');
+  const fileName = fileInput.files[0]?.name || 'unknown';
+  const match = fileName.match(/商品別売上_(\d{8})-\d{8}\.csv/);
+  const dateKey = match ? match[1] : 'unknown';
 
-  // Firebase 初期化
-  const firebaseConfig = {
-    apiKey: "AIzaSyDSZohtnPXem6m7f6A63KjXTQMUUFNk0Cg",
-    authDomain: "ghost-entrance.firebaseapp.com",
-    databaseURL: "https://ghost-entrance-default-rtdb.firebaseio.com",
-    projectId: "ghost-entrance",
-    storageBucket: "ghost-entrance.firebasestorage.app",
-    messagingSenderId: "977704976997",
-    appId: "1:977704976997:web:5c4d131d3e4d1a70757c8c"
+  // 解析データを構築
+  const analysisData = {
+    total,
+    foreign,
+    male,
+    female,
+    door,
+    fdoor,
+    doorLate,
+    fdoorLate,
+    shop,
+    sg,
+    sf
   };
-  const app = firebase.initializeApp(firebaseConfig);
-  const db = firebase.database(app);
 
-  function saveOutputToFirebase(dateKey, outputData, analysisData) {
-    firebase.database().ref('outputData/' + dateKey).set({
-      output: outputData,
-      analysis: analysisData,
-      timestamp: new Date().toISOString()
-    })
-    .then(() => console.log("出力データと解析データを保存しました"))
-    .catch((error) => console.error("データ保存に失敗しました:", error));
-  }
+  // Firebaseに保存
+  saveOutputToFirebase(dateKey, txt, analysisData);
 
-  /* ===== コピー ===== */
-  function copyTxt() {
-    const sg = +document.getElementById('sg').value || 0;
-    const sf = +document.getElementById('sf').value || 0;
-
-    let txt =
-`キャッシャー〆
-
-総数:${total}(外国人${foreign}名)
-M:${male} W:${female}
-
-Door                :    ${door}
-外国人Door             :    ${fdoor}
-22:00-1:00 Door     :    ${doorLate}
-22:00-1:00 外国人Door  :    ${fdoorLate}
-
-店ゲスト          ${sg}
-店フリー           ${sf}
-
-【店舗ゲスト/フリー】
-`;
-    Object.keys(shop).forEach(s => {
-      const g = shop[s].guest;
-      const f = shop[s].free + shop[s].freeInp;
-      txt += `${s}
-  ${g + f}(ゲスト${g} フリー ${shop[s].freeInp})
-`;
-    });
-
-    /* ▼ 自由記入ブロック */
-    if (freeList.length) {
-      freeList.forEach(o => {
-        const name = document.getElementById(o.nameId).value.trim() || '[無記名]';
-        const f = +document.getElementById(o.numId).value || 0;
-        const freeDisp = f ? f : ''; // 0 なら空欄
-        txt += `${name}
-  ${f}(ゲスト0 フリー ${freeDisp})
-`;
-      });
-    }
-
-    // ファイル名から日付を取得（例: 商品別売上_20250427-20250428.csv → 20250427）
-    const fileInput = document.getElementById('csv');
-    const fileName = fileInput.files[0]?.name || 'unknown';
-    const match = fileName.match(/商品別売上_(\d{8})-\d{8}\.csv/);
-    const dateKey = match ? match[1] : 'unknown';
-
-    // 解析データを構築
-    const analysisData = {
-      total,
-      foreign,
-      male,
-      female,
-      door,
-      fdoor,
-      doorLate,
-      fdoorLate,
-      shop,
-      sg,
-      sf
-    };
-
-    // Firebaseに保存
-    saveOutputToFirebase(dateKey, txt, analysisData);
-  }
-
+  // クリップボードにコピー
+  navigator.clipboard.writeText(txt)
+    .then(() => alert('コピー完了！'))
+    .catch(() => alert('コピー失敗…'));
+}
 </script>
 </body>
 </html>
