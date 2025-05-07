@@ -60,6 +60,8 @@
 
 <button onclick="copyTxt()">コピー</button>
 
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
 <script>
 /* ===== util ===== */
@@ -382,6 +384,63 @@ Door                :    ${door}
     .then(()=>alert('コピー完了！'))
     .catch(()=>alert('コピー失敗…'));
 }
+
+  // Firebase 初期化
+  const firebaseConfig = {
+    apiKey: "AIzaSyDSZohtnPXem6m7f6A63KjXTQMUUFNk0Cg",
+    authDomain: "ghost-entrance.firebaseapp.com",
+    databaseURL: "https://ghost-entrance-default-rtdb.firebaseio.com",
+    projectId: "ghost-entrance",
+    storageBucket: "ghost-entrance.firebasestorage.app",
+    messagingSenderId: "977704976997",
+    appId: "1:977704976997:web:5c4d131d3e4d1a70757c8c"
+  };
+  const app = firebase.initializeApp(firebaseConfig);
+  const db = firebase.database(app);
+
+  // ファイル選択時の処理
+  document.getElementById('csv').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // ファイル名から日時を抽出
+    const match = file.name.match(/商品別売上_(\d{8})-\d{8}\.csv/);
+    if (!match) {
+      alert("ファイル名が正しくありません");
+      return;
+    }
+    const dateKey = match[1]; // 前の日付をキーとして使用
+
+    // ファイルを読み込む
+    const fr = new FileReader();
+    fr.onload = (ev) => {
+      const txt = new TextDecoder('shift-jis').decode(ev.target.result);
+      Papa.parse(txt, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (r) => {
+          // Firebaseに保存するデータ
+          const firebaseData = {
+            date: dateKey,
+            data: r.data,
+            timestamp: new Date().toISOString()
+          };
+
+          // Firebaseに保存（上書き保存）
+          firebase.database().ref('salesData/' + dateKey).set(firebaseData)
+            .then(() => alert("データを保存しました"))
+            .catch((error) => console.error("データ保存失敗:", error));
+
+          // 既存の処理を実行
+          parseCSV(r.data);
+          buildTable();
+          buildSummary();
+          calcMoney();
+        }
+      });
+    };
+    fr.readAsArrayBuffer(file);
+  });
 </script>
 </body>
 </html>
