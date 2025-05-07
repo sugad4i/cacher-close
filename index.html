@@ -398,49 +398,87 @@ Door                :    ${door}
   const app = firebase.initializeApp(firebaseConfig);
   const db = firebase.database(app);
 
-  // ファイル選択時の処理
-  document.getElementById('csv').addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  function saveOutputToFirebase(dateKey, outputData, analysisData) {
+    firebase.database().ref('outputData/' + dateKey).set({
+      output: outputData,
+      analysis: analysisData,
+      timestamp: new Date().toISOString()
+    })
+    .then(() => console.log("出力データと解析データを保存しました"))
+    .catch((error) => console.error("データ保存に失敗しました:", error));
+  }
 
-    // ファイル名から日時を抽出
-    const match = file.name.match(/商品別売上_(\d{8})-\d{8}\.csv/);
-    if (!match) {
-      alert("ファイル名が正しくありません");
-      return;
-    }
-    const dateKey = match[1]; // 前の日付をキーとして使用
+  /* ===== コピー ===== */
+  function copyTxt() {
+    const sg = +document.getElementById('sg').value || 0;
+    const sf = +document.getElementById('sf').value || 0;
 
-    // ファイルを読み込む
-    const fr = new FileReader();
-    fr.onload = (ev) => {
-      const txt = new TextDecoder('shift-jis').decode(ev.target.result);
-      Papa.parse(txt, {
-        header: true,
-        skipEmptyLines: true,
-        complete: (r) => {
-          // Firebaseに保存するデータ
-          const firebaseData = {
-            date: dateKey,
-            data: r.data,
-            timestamp: new Date().toISOString()
-          };
+    let txt =
+`キャッシャー〆
 
-          // Firebaseに保存（上書き保存）
-          firebase.database().ref('salesData/' + dateKey).set(firebaseData)
-            .then(() => alert("データを保存しました"))
-            .catch((error) => console.error("データ保存失敗:", error));
+総数:${total}(外国人${foreign}名)
+M:${male} W:${female}
 
-          // 既存の処理を実行
-          parseCSV(r.data);
-          buildTable();
-          buildSummary();
-          calcMoney();
-        }
+Door                :    ${door}
+外国人Door             :    ${fdoor}
+22:00-1:00 Door     :    ${doorLate}
+22:00-1:00 外国人Door  :    ${fdoorLate}
+
+店ゲスト          ${sg}
+店フリー           ${sf}
+
+【店舗ゲスト/フリー】
+`;
+    Object.keys(shop).forEach(s => {
+      const g = shop[s].guest;
+      const f = shop[s].free + shop[s].freeInp;
+      txt += `${s}
+  ${g + f}(ゲスト${g} フリー ${shop[s].freeInp})
+`;
+    });
+
+    /* ▼ 自由記入ブロック */
+    if (freeList.length) {
+      freeList.forEach(o => {
+        const name = document.getElementById(o.nameId).value.trim() || '[無記名]';
+        const f = +document.getElementById(o.numId).value || 0;
+        const freeDisp = f ? f : ''; // 0 なら空欄
+        txt += `${name}
+  ${f}(ゲスト0 フリー ${freeDisp})
+`;
       });
+    }
+
+    // ファイル名から日付を取得（例: 商品別売上_20250427-20250428.csv → 20250427）
+    const fileInput = document.getElementById('csv');
+    const fileName = fileInput.files[0]?.name || 'unknown';
+    const match = fileName.match(/商品別売上_(\d{8})-\d{8}\.csv/);
+    const dateKey = match ? match[1] : 'unknown';
+
+    // 解析データを構築
+    const analysisData = {
+      total,
+      foreign,
+      male,
+      female,
+      door,
+      fdoor,
+      doorLate,
+      fdoorLate,
+      shop,
+      sg,
+      sf
     };
-    fr.readAsArrayBuffer(file);
-  });
+
+    // Firebaseに保存
+    saveOutputToFirebase(dateKey, txt, analysisData);
+
+    // クリップボードにコピー
+    navigator.clipboard.writeText(txt)
+      .then(() => alert('コピー完了！'))
+      .catch(() => alert('コピー失敗…'));
+  }
+
 </script>
 </body>
 </html>
