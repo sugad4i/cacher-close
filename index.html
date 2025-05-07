@@ -60,32 +60,12 @@
 
 <button onclick="copyTxt()">コピー</button>
 
-<!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
 <script>
 /* ===== util ===== */
 document.getElementById('upd').textContent =
   '更新 ' + new Date().toLocaleDateString();
 
-// Firebaseの初期化
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
-import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyDSZohtnPXem6m7f6A63KjXTQMUUFNk0Cg",
-  authDomain: "ghost-entrance.firebaseapp.com",
-  databaseURL: "https://ghost-entrance-default-rtdb.firebaseio.com",
-  projectId: "ghost-entrance",
-  storageBucket: "ghost-entrance.firebasestorage.app",
-  messagingSenderId: "977704976997",
-  appId: "1:977704976997:web:5c4d131d3e4d1a70757c8c"
-};
-
-// Firebaseアプリを初期化
-const app = initializeApp(firebaseConfig);
-const database = getDatabase(app);
 const tbody   = document.querySelector('#tbl tbody');
 const summary = document.getElementById('summary');
 const yenI    = document.getElementById('yenInput');
@@ -357,20 +337,10 @@ function addFree(){
   document.getElementById('freeArea').appendChild(div);
 }
 
-function saveToFirebase(data) {
-  const dbRef = ref(database, 'outputs/' + Date.now()); // ユニークなキーを生成
-  set(dbRef, data)
-    .then(() => {
-      alert("データがFirebaseに保存されました！");
-    })
-    .catch((error) => {
-      console.error("データ保存エラー:", error);
-    });
-}
 /* ===== コピー ===== */
-function copyTxt() {
-  const sg = +document.getElementById('sg').value || 0;
-  const sf = +document.getElementById('sf').value || 0;
+function copyTxt(){
+  const sg = +document.getElementById('sg').value||0;
+  const sf = +document.getElementById('sf').value||0;
 
   let txt =
 `キャッシャー〆
@@ -388,35 +358,29 @@ Door                :    ${door}
 
 【店舗ゲスト/フリー】
 `;
-  Object.keys(shop).forEach(s => {
-    const g = shop[s].guest;
-    const f = shop[s].free + shop[s].freeInp;
+  Object.keys(shop).forEach(s=>{
+    const g=shop[s].guest;
+    const f=shop[s].free+shop[s].freeInp;
     txt += `${s}
-  ${g + f}(ゲスト${g} フリー ${shop[s].freeInp})
+  ${g+f}(ゲスト${g} フリー ${shop[s].freeInp})
 `;
   });
 
   /* ▼ 自由記入ブロック */
-  if (freeList.length) {
-    freeList.forEach(o => {
+  if(freeList.length){
+    freeList.forEach(o=>{
       const name = document.getElementById(o.nameId).value.trim() || '[無記名]';
-      const f = +document.getElementById(o.numId).value || 0;
-      const freeDisp = f ? f : ''; // 0 なら空欄
+      const f    = +document.getElementById(o.numId).value || 0;
+      const freeDisp = f ? f : '';             // 0 なら空欄
       txt += `${name}
   ${f}(ゲスト0 フリー ${freeDisp})
 `;
     });
   }
 
-  // Firebaseに保存
-  saveToFirebase({
-    summary: txt,
-    timestamp: new Date().toISOString()
-  });
-
   navigator.clipboard.writeText(txt)
-    .then(() => alert('コピー完了！'))
-    .catch(() => alert('コピー失敗…'));
+    .then(()=>alert('コピー完了！'))
+    .catch(()=>alert('コピー失敗…'));
 }
 </script>
 </body>
