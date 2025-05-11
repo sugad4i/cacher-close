@@ -61,23 +61,7 @@
 <button onclick="copyTxt()">コピー</button>
 
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js"></script>
 <script>
-/* ===== Firebase 初期化 ===== */
-const firebaseConfig = {
-  apiKey: "AIzaSyDSZohtnPXem6m7f6A63KjXTQMUUFNk0Cg",
-  authDomain: "ghost-entrance.firebaseapp.com",
-  databaseURL: "https://ghost-entrance-default-rtdb.firebaseio.com",
-  projectId: "ghost-entrance",
-  storageBucket: "ghost-entrance.firebasestorage.app",
-  messagingSenderId: "977704976997",
-  appId: "1:977704976997:web:5c4d131d3e4d1a70757c8c"
-};
-
-const app = firebase.initializeApp(firebaseConfig);
-const database = firebase.database();
-
 /* ===== util ===== */
 document.getElementById('upd').textContent =
   '更新 ' + new Date().toLocaleDateString();
@@ -89,6 +73,94 @@ const yenC    = document.getElementById('yenCsv');
 const warnBox = document.getElementById('warn');
 const norm = s=>s.replace(/22~1/g,'22-1').replace(/[ \u3000\t]+/g,' ').trim();
 
+/* ===== 並び順 ===== */
+const order22 = [
+  '22-1 ローカル男性','22-1 ローカル女性',
+  '22-1 ローカルG男性','22-1 ローカルG女性',
+  '22-1 男性','22-1 女性',
+  '22-1 ローカル男性ゲスト','22-1 ローカル女性ゲスト',
+  '22-1 ローカルG男性ゲスト','22-1 ローカルG女性ゲスト',
+  '22-1 男性ゲスト','22-1 女性ゲスト',
+  '22-1 G男性ゲスト','22-1 G女性ゲスト',
+  '22-1 ローカルゲストG男性','22-1 ローカルゲストG女性',
+  '22-1 観光 男性','22-1 観光 女性'
+];
+
+const orderNorm = [
+  '男性','ローカル男性','ローカル女性',
+  '女性','ローカルG男性','ローカルG女性',
+  'ローカル男性ゲスト','ローカル女性ゲスト',
+  'ローカルG男性ゲスト','ローカルG女性ゲスト',
+  'ローカルゲスト男性','ローカルゲスト女性',
+  'ローカルG男性ゲスト','ローカルG女性ゲスト',
+  'ローカルゲストG男性','ローカルゲストG女性',
+  '観光 男性','観光 女性'
+];
+
+function sKey(l){
+  if(l.startsWith('22-1')){
+    const i = order22.indexOf(l);
+    return '0'+(i>=0?String(i).padStart(2,'0'):'99')+l;
+  }
+  if(l.includes('フリー')) return '2'+l;
+  const j = orderNorm.indexOf(l);
+  return '1'+(j>=0?String(j).padStart(2,'0'):'99')+l;
+}
+
+/* ===== 単価テンプレ ===== */
+const priceTpl = {
+  ARGO : {
+    /* 22-1 全500 */
+    '22-1 ローカル男性':500,'22-1 ローカルG男性':500,
+    '22-1 ローカル女性':500,'22-1 ローカルG女性':500,
+    '22-1 男性':500,'22-1 女性':500,
+    '22-1 ローカル男性ゲスト':500,'22-1 ローカルG男性ゲスト':500,
+    '22-1 ローカル女性ゲスト':500,'22-1 ローカルG女性ゲスト':500,
+    '22-1 男性ゲスト':500,'22-1 女性ゲスト':500,
+    '22-1 G男性ゲスト':500,'22-1 G女性ゲスト':500,
+    '22-1 ローカルゲストG男性':500,'22-1 ローカルゲストG女性':500,
+    '22-1 観光 男性':500,'22-1 観光 女性':500,
+
+    /* 通常 */
+    '男性':2000,'ローカル男性':2000,'ローカルG男性':2000,
+    '女性':1000,'ローカル女性':1000,'ローカルG女性':1000,
+    'ローカル男性ゲスト':1500,'ローカルG男性ゲスト':1500,
+    'ローカル女性ゲスト':700 ,'ローカルG女性ゲスト':700,
+    'ローカルゲスト男性':1500,'ローカルゲスト女性':700,
+    'ローカルG男性ゲスト':1500,'ローカルG女性ゲスト':700,
+    'ローカルゲストG男性':1500,'ローカルゲストG女性':700,
+    '観光 男性':2000,'観光 女性':1000,
+    'フリー':0,'再入場':500,'靴':1000
+  },
+  ENCORE : {
+    /* 22-1 全500 */
+    '22-1 ローカル男性':500,'22-1 ローカルG男性':500,'22-1 ローカル女性':500,'22-1 ローカルG女性':500,
+    '22-1 男性':500,'22-1 女性':500,
+    '22-1 ローカル男性ゲスト':500,'22-1 ローカルG男性ゲスト':500,
+    '22-1 ローカル女性ゲスト':500,'22-1 ローカルG女性ゲスト':500,
+    '22-1 男性ゲスト':500,'22-1 女性ゲスト':500,
+    '22-1 G男性ゲスト':500,'22-1 G女性ゲスト':500,
+    '22-1 ローカルゲストG男性':500,'22-1 ローカルゲストG女性':500,
+    '22-1 観光 男性':500,'22-1 観光 女性':500,
+
+    /* 通常 */
+    '男性':2000,'ローカル男性':2000,'ローカルG男性':2000,
+    '女性':1000,'ローカル女性':1000,'ローカルG女性':1000,
+    'ローカル男性ゲスト':1500,'ローカルG男性ゲスト':1500,
+    'ローカル女性ゲスト':700 ,'ローカルG女性ゲスト':700,
+    'ローカルゲスト男性':1500,'ローカルゲスト女性':700,
+    'ローカルG男性ゲスト':1500,'ローカルG女性ゲスト':700,
+    'ローカルゲストG男性':1500,'ローカルゲストG女性':700,
+    '観光 男性':3000,'観光 女性':2000,
+    'フリー':0,'再入場':500,'靴':1000
+  }
+};
+
+/* ===== 集計用 ===== */
+let rows=[],total=0,foreign=0,male=0,female=0;
+let door=0,fdoor=0,doorLate=0,fdoorLate=0,saleSum=0;
+const shop={}, freeList=[];
+
 /* ===== CSV 読み込み ===== */
 document.getElementById('csv').addEventListener('change',e=>{
   const f=e.target.files[0]; if(!f) return;
@@ -97,7 +169,6 @@ document.getElementById('csv').addEventListener('change',e=>{
     const txt=new TextDecoder('shift-jis').decode(ev.target.result);
     Papa.parse(txt,{header:true,skipEmptyLines:true,complete:r=>{
       parseCSV(r.data); buildTable(); buildSummary(); calcMoney();
-      sendToFirebase(r.data); // CSV読み込み後にFirebase送信
     }});
   };
   fr.readAsArrayBuffer(f);
@@ -123,6 +194,16 @@ function parseCSV(data){
     /* ローカルG 振り分け */
     if(rawCat==='ローカル男性')        cat = nm.includes('G男性') ? 'ローカルG男性' : 'ローカル男性';
     if(rawCat==='ローカル女性')        cat = nm.includes('G女性') ? 'ローカルG女性' : 'ローカル女性';
+    if(rawCat==='22-1 ローカル男性')   cat = nm.includes('G男性') ? '22-1 ローカルG男性' : '22-1 ローカル男性';
+    if(rawCat==='22-1 ローカル女性')   cat = nm.includes('G女性') ? '22-1 ローカルG女性' : '22-1 ローカル女性';
+
+    /* その他 → 商品名ラベル */
+    const isOther = rawCat==='その他';
+    if(isOther) cat = nm;
+
+    /* 観光 男女分割 */
+    if(cat==='観光')      cat += ' ' + (nm.includes('女性')?'女性':'男性');
+    if(cat==='22-1 観光') cat += ' ' + (nm.includes('女性')?'女性':'男性');
 
     /* 人数 */
     const n = Math.max(0,(+r[saleQtyCol]||0) - (+r[retQtyCol]||0));
@@ -134,42 +215,33 @@ function parseCSV(data){
     /* 行集計 */
     map.set(cat,(map.get(cat)||0)+n);
 
+    if(isOther) return;   // その他はサマリー対象外
+
+    /* Door */
+    if(['ローカル男性','ローカル女性','ローカルG男性','ローカルG女性'].includes(cat)) door+=n;
+    if(['観光 男性','観光 女性'].includes(cat))                                            fdoor+=n;
+    if(['22-1 男性','22-1 女性','22-1 ローカル男性','22-1 ローカル女性','22-1 ローカルG男性','22-1 ローカルG女性'].includes(cat)) doorLate+=n;
+    if(['22-1 観光 男性','22-1 観光 女性'].includes(cat))                                    fdoorLate+=n;
+
+    if(nm.includes('男性')) male+=n; else if(nm.includes('女性')) female+=n;
+    total+=n;
     if(cat.includes('観光')) foreign+=n;
+
+    /* 店舗ゲスト／フリー */
+    const m = nm.match(/^(.+?)(ゲスト|フリー)/);
+    if(m){
+      const key = m[1].replace(/22-1/gi,'').trim();
+      shop[key]=shop[key]||{guest:0,free:0,freeInp:0};
+      if(m[2]==='ゲ스트') shop[key].guest+=n; else shop[key].free+=n;
+    }
   });
 
-  rows = [...map.entries()].map(([label,cnt])=>({label,cnt}));
+  if(!map.has('フリー')) map.set('フリー',0);
+
+  rows = [...map.entries()].map(([label,cnt])=>({label,cnt}))
+         .sort((a,b)=>sKey(a.label).localeCompare(sKey(b.label),'ja')||
+                      a.label.localeCompare(b.label,'ja'));
 }
-
-/* ===== Firebase送信 ===== */
-function sendToFirebase(data) {
-  const timestamp = new Date().toISOString();
-  const dbRef = firebase.database().ref('outputs/' + timestamp);
-
-  const payload = {
-    timestamp: timestamp,
-    total: total,
-    foreign: foreign,
-    male: male,
-    female: female,
-    door: door,
-    fdoor: fdoor,
-    doorLate: doorLate,
-    fdoorLate: fdoorLate,
-    saleSum: saleSum,
-    rows: rows
-  };
-
-  dbRef.set(payload)
-    .then(() => {
-      console.log("データがFirebaseに送信されました！");
-    })
-    .catch((error) => {
-      console.error("データ送信エラー:", error);
-    });
-}
-
-/* ===== その他の既存関数（buildTable, buildSummary, calcMoneyなど） ===== */
-// 既存の関数はそのまま維持
 
 /* ===== テーブル ===== */
 function buildTable(){
