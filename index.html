@@ -278,10 +278,8 @@ Door                :    ${door}
 
 【店舗ゲスト/フリー】
 `;
-// ...existing code...
 Object.keys(shop).forEach(s=>{
   const id = `fi_${btoa(unescape(encodeURIComponent(s)))}`;
-  // freeInpが未定義なら0をセット
   if (typeof shop[s].freeInp === "undefined") shop[s].freeInp = 0;
   h += `${s}
   <span id="tot_${id}">${shop[s].guest + shop[s].freeInp}</span>(ゲスト${shop[s].guest} フリー <input type="number" id="${id}" value="${shop[s].freeInp}">)
@@ -366,10 +364,10 @@ Door                :    ${door}
 【店舗ゲスト/フリー】
 `;
   Object.keys(shop).forEach(s=>{
-    const g=shop[s].guest;
-    const f=shop[s].free+shop[s].freeInp;
+    const g = shop[s].guest;
+    const f = shop[s].freeInp;
     txt += `${s}
-  ${g+f}(ゲスト${g} フリー ${shop[s].freeInp})
+  ${g+f}(ゲスト${g} フリー ${f})
 `;
   });
 
