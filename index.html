@@ -27,7 +27,7 @@
 <body>
 
 <div id="head">
-  <h1>キャッシャー集計 ver1.05</h1>
+  <h1>キャッシャー集計 ver1.03</h1>
   <span id="upd"></span>
 </div>
 
@@ -83,8 +83,7 @@ const order22 = [
   '22-1 男性ゲスト','22-1 女性ゲスト',
   '22-1 G男性ゲスト','22-1 G女性ゲスト',
   '22-1 ローカルゲストG男性','22-1 ローカルゲストG女性',
-  '22-1 観光 男性','22-1 観光 女性',
-  '22-1 G男性','22-1 G女性'
+  '22-1 観光 男性','22-1 観光 女性'
 ];
 
 const orderNorm = [
@@ -95,8 +94,7 @@ const orderNorm = [
   'ローカルゲスト男性','ローカルゲスト女性',
   'ローカルG男性ゲスト','ローカルG女性ゲスト',
   'ローカルゲストG男性','ローカルゲストG女性',
-  '観光 男性','観光 女性',
-  'G男性','G女性'
+  '観光 男性','観光 女性'
 ];
 
 function sKey(l){
@@ -142,13 +140,12 @@ const priceTpl = {
     '22-1 ローカル女性ゲスト':500,'22-1 ローカルG女性ゲスト':500,
     '22-1 男性ゲスト':500,'22-1 女性ゲスト':500,
     '22-1 G男性ゲスト':500,'22-1 G女性ゲスト':500,
-    '22-1 G男性':500,'22-1 G女性':500,
     '22-1 ローカルゲストG男性':500,'22-1 ローカルゲストG女性':500,
     '22-1 観光 男性':500,'22-1 観光 女性':500,
 
     /* 通常 */
-    '男性':2000,'ローカル男性':2000,'ローカルG男性':2000,'G男性':3000,
-    '女性':1000,'ローカル女性':1000,'ローカルG女性':1000,'G女性':2000,
+    '男性':2000,'ローカル男性':2000,'ローカルG男性':2000,
+    '女性':1000,'ローカル女性':1000,'ローカルG女性':1000,
     'ローカル男性ゲスト':1500,'ローカルG男性ゲスト':1500,
     'ローカル女性ゲスト':700 ,'ローカルG女性ゲスト':700,
     'ローカルゲスト男性':1500,'ローカルゲスト女性':700,
@@ -278,28 +275,26 @@ Door                :    ${door}
 
 【店舗ゲスト/フリー】
 `;
-Object.keys(shop).forEach(s=>{
-  const id = `fi_${btoa(unescape(encodeURIComponent(s)))}`;
-  if (typeof shop[s].freeInp === "undefined") shop[s].freeInp = 0;
-  h += `${s}
-  <span id="tot_${id}">${shop[s].guest + shop[s].freeInp}</span>(ゲスト${shop[s].guest} フリー <input type="number" id="${id}" value="${shop[s].freeInp}">)
+  Object.keys(shop).forEach(s=>{
+    const id = `fi_${btoa(unescape(encodeURIComponent(s)))}`;
+    h += `${s}
+  <span id="tot_${id}">${shop[s].guest+shop[s].free}</span>(ゲスト${shop[s].guest} フリー <input type="number" id="${id}" value="0">)
 `;
-});
+  });
 
-summary.textContent=''; summary.insertAdjacentHTML('afterbegin',h);
+  summary.textContent=''; summary.insertAdjacentHTML('afterbegin',h);
 
-document.getElementById('sg').oninput=calcMoney;
-document.getElementById('sf').oninput=calcMoney;
-Object.keys(shop).forEach(s=>{
-  const id=`fi_${btoa(unescape(encodeURIComponent(s)))}`;
-  document.getElementById(id).oninput=e=>{
-    shop[s].freeInp=+e.target.value||0;
-    document.getElementById(`tot_${id}`).textContent =
-      shop[s].guest + shop[s].freeInp;
-    calcMoney();
-  };
-});
-// ...existing code...
+  document.getElementById('sg').oninput=calcMoney;
+  document.getElementById('sf').oninput=calcMoney;
+  Object.keys(shop).forEach(s=>{
+    const id=`fi_${btoa(unescape(encodeURIComponent(s)))}`;
+    document.getElementById(id).oninput=e=>{
+      shop[s].freeInp=+e.target.value||0;
+      document.getElementById(`tot_${id}`).textContent =
+        shop[s].guest+shop[s].free+shop[s].freeInp;
+      calcMoney();
+    };
+  });
 }
 
 /* ===== テンプレ ===== */
@@ -364,10 +359,10 @@ Door                :    ${door}
 【店舗ゲスト/フリー】
 `;
   Object.keys(shop).forEach(s=>{
-    const g = shop[s].guest;
-    const f = shop[s].freeInp;
+    const g=shop[s].guest;
+    const f=shop[s].free+shop[s].freeInp;
     txt += `${s}
-  ${g+f}(ゲスト${g} フリー ${f})
+  ${g+f}(ゲスト${g} フリー ${shop[s].freeInp})
 `;
   });
 
