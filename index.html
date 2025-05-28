@@ -203,27 +203,28 @@ Door                :    ${door}
 
 【店舗ゲスト/フリー】
 `;
-  Object.keys(shop).forEach(s=>{
-    const id = `fi_${btoa(unescape(encodeURIComponent(s)))}`;
-    h += `${s}
-  <span id="tot_${id}">${shop[s].guest+shop[s].free}</span>(ゲスト${shop[s].guest} フリー <input type="number" id="${id}" value="0">)
+Object.keys(shop).forEach(s=>{
+  const id = `fi_${btoa(unescape(encodeURIComponent(s)))}`;
+  // freeInpが未定義なら0をセット
+  if (typeof shop[s].freeInp === "undefined") shop[s].freeInp = 0;
+  h += `${s}
+  <span id="tot_${id}">${shop[s].guest + shop[s].freeInp}</span>(ゲスト${shop[s].guest} フリー <input type="number" id="${id}" value="${shop[s].freeInp}">)
 `;
-  });
+});
 
-  summary.textContent=''; summary.insertAdjacentHTML('afterbegin',h);
+summary.textContent=''; summary.insertAdjacentHTML('afterbegin',h);
 
-  document.getElementById('sg').oninput=calcMoney;
-  document.getElementById('sf').oninput=calcMoney;
-  Object.keys(shop).forEach(s=>{
-    const id=`fi_${btoa(unescape(encodeURIComponent(s)))}`;
-    document.getElementById(id).oninput=e=>{
-      shop[s].freeInp=+e.target.value||0;
-      document.getElementById(`tot_${id}`).textContent =
-        shop[s].guest+shop[s].free+shop[s].freeInp;
-      calcMoney();
-    };
-  });
-}
+document.getElementById('sg').oninput=calcMoney;
+document.getElementById('sf').oninput=calcMoney;
+Object.keys(shop).forEach(s=>{
+  const id=`fi_${btoa(unescape(encodeURIComponent(s)))}`;
+  document.getElementById(id).oninput=e=>{
+    shop[s].freeInp=+e.target.value||0;
+    document.getElementById(`tot_${id}`).textContent =
+      shop[s].guest + shop[s].freeInp;
+    calcMoney();
+  };
+});
 
 /* ===== テンプレ ===== */
 function applyTpl(name){
